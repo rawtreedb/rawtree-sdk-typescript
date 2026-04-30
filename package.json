@@ -1,5 +1,5 @@
 {
-  "name": "rawtree",
+  "name": "@rawtree/sdk",
   "version": "0.1.0",
   "description": "TypeScript SDK for building apps with RawTree.",
   "type": "module",

@@ -5,13 +5,13 @@ TypeScript SDK for building apps with RawTree.
 ## Install
 
 ```sh
-npm install rawtree
+npm install @rawtree/sdk
 ```
 
 ## Usage
 
 ```ts
-import { RawTree } from "rawtree";
+import { RawTree } from "@rawtree/sdk";
 
 const rawtree = new RawTree({
   apiKey: process.env.RAWTREE_API_KEY!,
