@@ -1,5 +1,7 @@
 # RawTree TypeScript SDK
 
+> Experimental: this SDK is early and its public API may change before a stable release.
+
 TypeScript SDK for building apps with RawTree.
 
 ## Install
