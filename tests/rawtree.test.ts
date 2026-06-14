@@ -1,5 +1,8 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import { generateText } from "ai";
 import { RawTree, RawTreeError, type QueryResponse } from "../src/index.js";
+import { initRawTree } from "../src/monitoring.js";
+import { aiSdkIntegration } from "../src/integrations/ai-sdk.js";
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body), {
@@ -167,5 +170,134 @@ describe("RawTree", () => {
   it("keeps query rows generic", () => {
     type EventRow = { event: string };
     expectTypeOf<QueryResponse<EventRow>["data"]>().toEqualTypeOf<EventRow[]>();
+  });
+
+  it("captures monitoring events and flushes them to a table", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const rawtree = initRawTree({
+      apiKey: "rw_test",
+      fetch: fetchMock,
+      table: "monitoring_events",
+      service: "api",
+      environment: "test",
+      batch: { intervalMs: 60_000 },
+    });
+
+    rawtree.setTag("region", "local");
+    rawtree.capture("checkout.started", { userId: "u_123" });
+    await rawtree.flush();
+
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://api.rawtree.com/v1/tables/monitoring_events",
+    );
+    expect(body[0]).toMatchObject({
+      type: "checkout.started",
+      source: "manual",
+      service: "api",
+      environment: "test",
+      tags: { region: "local" },
+      payload: { userId: "u_123" },
+    });
+  });
+
+  it("allows beforeSend to drop monitoring events", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const rawtree = initRawTree({
+      apiKey: "rw_test",
+      fetch: fetchMock,
+      beforeSend: () => null,
+      batch: { intervalMs: 60_000 },
+    });
+
+    rawtree.capture("debug.noise", { value: true });
+    await rawtree.flush();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("captures AI SDK generate calls through global telemetry", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const rawtree = initRawTree({
+      apiKey: "rw_test",
+      fetch: fetchMock,
+      table: "ai_events",
+      integrations: [
+        aiSdkIntegration({
+          captureInputs: true,
+          captureOutputs: true,
+        }),
+      ],
+      batch: { intervalMs: 60_000 },
+    });
+    const usage = {
+      inputTokens: { total: 4, noCache: 4, cacheRead: 0, cacheWrite: 0 },
+      outputTokens: { total: 2, text: 2, reasoning: 0 },
+    };
+    const model = {
+      specificationVersion: "v3",
+      provider: "openai",
+      modelId: "gpt-test",
+      supportedUrls: {},
+      doGenerate: async () => ({
+        content: [{ type: "text", text: "hello" }],
+        finishReason: { unified: "stop", raw: "stop" },
+        usage,
+        warnings: [],
+      }),
+      doStream: async () => {
+        throw new Error("not used");
+      },
+    } as const;
+
+    await generateText({
+      model,
+      prompt: "Say hello",
+      experimental_telemetry: {
+        isEnabled: true,
+        recordInputs: true,
+        recordOutputs: true,
+      },
+    });
+    await rawtree.flush();
+    await rawtree.close();
+
+    const rows = fetchMock.mock.calls.flatMap((call) => JSON.parse(call[1]?.body as string));
+    const startEvent = rows.find((row) => row.type === "ai.sdk.start");
+    const finishEvent = rows.find((row) => row.type === "ai.sdk.generate");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.rawtree.com/v1/tables/ai_events");
+    expect(startEvent).toMatchObject({
+      type: "ai.sdk.start",
+      source: "ai-sdk",
+      payload: {
+        operation: "start",
+        provider: "openai",
+        model: "gpt-test",
+        prompt: "Say hello",
+      },
+    });
+    expect(finishEvent).toMatchObject({
+      type: "ai.sdk.generate",
+      source: "ai-sdk",
+      status: "ok",
+      payload: {
+        operation: "generate",
+        provider: "openai",
+        model: "gpt-test",
+        finishReason: "stop",
+        totalUsage: {
+          inputTokens: 4,
+          outputTokens: 2,
+        },
+        result: {
+          finishReason: "stop",
+          usage: {
+            inputTokens: 4,
+            outputTokens: 2,
+          },
+          text: { length: 5, text: "hello" },
+        },
+      },
+    });
   });
 });

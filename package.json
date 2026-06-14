@@ -10,6 +10,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./monitoring": {
+      "types": "./dist/monitoring.d.ts",
+      "import": "./dist/monitoring.js"
+    },
+    "./integrations/ai-sdk": {
+      "types": "./dist/integrations/ai-sdk.d.ts",
+      "import": "./dist/integrations/ai-sdk.js"
     }
   },
   "files": [
@@ -26,8 +34,21 @@
     "typescript"
   ],
   "license": "MIT",
+  "peerDependencies": {
+    "ai": "^6.0.204 || ^7.0.0-0"
+  },
+  "peerDependenciesMeta": {
+    "ai": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@ai-sdk/openai": "^3.0.71",
+    "@types/json-schema": "^7.0.15",
+    "@types/node": "^25.9.3",
+    "ai": "^6.0.204",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.6",
+    "zod": "^4.4.3"
   }
 }
