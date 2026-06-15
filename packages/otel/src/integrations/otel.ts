@@ -1,4 +1,9 @@
-import { trace, type Context } from "@opentelemetry/api";
+import {
+  trace,
+  type Attributes,
+  type Context,
+} from "@opentelemetry/api";
+import { resourceFromAttributes } from "@opentelemetry/resources";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import type {
   ReadableSpan,
@@ -17,6 +22,7 @@ export interface RawTreeOtelRegistrationOptions {
 
 export interface RawTreeTracerProviderRegistrationOptions extends RawTreeOtelRegistrationOptions {
   spanProcessors?: SpanProcessor[];
+  resourceAttributes?: Attributes;
 }
 
 export interface RawTreeOtelProcessorRegistration {
@@ -221,7 +227,7 @@ export function normalizeValue(value: unknown): unknown {
 }
 
 function ensureRawTreeTracerProvider(
-  options: RawTreeOtelRegistrationOptions,
+  options: RawTreeTracerProviderRegistrationOptions,
   spanProcessors: SpanProcessor[] = [],
 ): { providerRegistered: boolean; created: boolean } {
   if (provider) {
@@ -239,6 +245,9 @@ function ensureRawTreeTracerProvider(
   }
 
   const nextProvider = new NodeTracerProvider({
+    resource: options.resourceAttributes
+      ? resourceFromAttributes(options.resourceAttributes)
+      : undefined,
     spanProcessors: [...spanProcessors, processorHost],
   });
 

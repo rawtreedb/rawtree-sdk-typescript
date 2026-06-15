@@ -100,8 +100,10 @@ try {
 OpenTelemetry trace spans are stored in the `traces` table as `otel.span` with
 the original span name, attributes, resource, scope, and timing preserved in the
 payload. Spans created under the same active context share `trace_id`, `span_id`,
-and `parent_span_id`. Future log and metric exporters should follow the same
-signal naming convention with `logs` and `metrics` tables by default.
+and `parent_span_id`. `serviceName` is stored as the canonical OTel resource
+attribute `service.name`, so RawTree can flatten and query it from the ingested
+object. Future log and metric exporters should follow the same signal naming
+convention with `logs` and `metrics` tables by default.
 
 The Sentry-style monitoring client is still available for manual events:
 

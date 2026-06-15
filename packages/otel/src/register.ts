@@ -4,6 +4,7 @@ import {
   type BufferConfig,
   type SpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
+import type { Attributes } from "@opentelemetry/api";
 import {
   type RawTreeIntegration,
   type RawTreeIntegrationTeardown,
@@ -13,6 +14,7 @@ import { registerRawTreeTracerProvider } from "./integrations/otel.js";
 
 export interface RawTreeRegisterOtelBaseOptions {
   serviceName?: string;
+  attributes?: Attributes;
   integrations?: RawTreeIntegration[];
   spanProcessor?: "batch" | "simple" | SpanProcessor;
   batchSpanProcessorOptions?: BufferConfig;
@@ -26,7 +28,7 @@ export interface RawTreeRegisterOtelExporterOptions extends RawTreeRegisterOtelB
 
 export interface RawTreeRegisterOtelRawTreeOptions
   extends RawTreeRegisterOtelBaseOptions,
-    Omit<RawTreeTraceExporterOptions, "service" | "table" | "batch"> {
+    Omit<RawTreeTraceExporterOptions, "service" | "table" | "batch" | "attributes"> {
   exporter?: never;
 }
 
@@ -45,6 +47,7 @@ export function registerOTel(options: RawTreeRegisterOtelOptions): RawTreeOtelHa
   const spanProcessor = toSpanProcessor(options, exporter);
   const providerRegistration = registerRawTreeTracerProvider({
     forceRegisterProvider: options.forceRegisterProvider,
+    resourceAttributes: getResourceAttributes(options),
     unregisterOnClose: options.unregisterOnShutdown,
     spanProcessors: [spanProcessor],
   });
@@ -125,6 +128,7 @@ function toExporter(options: RawTreeRegisterOtelOptions): RawTreeTraceExporter {
 
   const {
     serviceName,
+    attributes: _attributes,
     exporter: _exporter,
     integrations: _integrations,
     spanProcessor: _spanProcessor,
@@ -136,8 +140,19 @@ function toExporter(options: RawTreeRegisterOtelOptions): RawTreeTraceExporter {
 
   return new RawTreeTraceExporter({
     ...exporterOptions,
-    service: serviceName,
   });
+}
+
+function getResourceAttributes(options: RawTreeRegisterOtelOptions): Attributes | undefined {
+  const attributes = {
+    ...options.attributes,
+    "service.name": options.serviceName ?? options.attributes?.["service.name"],
+  };
+  const entries = Object.entries(attributes).filter(([, value]) => value !== undefined);
+
+  return entries.length > 0
+    ? Object.fromEntries(entries) as Attributes
+    : undefined;
 }
 
 function hasCustomExporter(

@@ -251,7 +251,6 @@ describe("RawTree", () => {
     expect(rows[0]).toMatchObject({
       type: "otel.span",
       source: "otel",
-      service: "api",
       status: "ok",
       payload: {
         name: "GET /api/chat",
@@ -263,8 +262,14 @@ describe("RawTree", () => {
         scope: {
           name: "rawtree-register-otel-test",
         },
+        resource: {
+          attributes: {
+            "service.name": "api",
+          },
+        },
       },
     });
+    expect(rows[0]?.service).toBeUndefined();
     expect(rows[0]?.trace_id).toEqual(expect.any(String));
     expect(rows[0]?.span_id).toEqual(expect.any(String));
     expect(rows[0]?.duration_ms).toEqual(expect.any(Number));
