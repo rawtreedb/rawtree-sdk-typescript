@@ -22,6 +22,7 @@ export interface RawTreeTraceExporterOptions
 
 const DEFAULT_EVENT_NAME = "otel.span";
 const DEFAULT_SOURCE = "otel";
+const DEFAULT_TRACES_TABLE = "traces";
 
 export class RawTreeTraceExporter implements SpanExporter {
   private readonly client: RawTreeMonitoringClient;
@@ -34,6 +35,7 @@ export class RawTreeTraceExporter implements SpanExporter {
   constructor(options: RawTreeTraceExporterOptions) {
     this.client = new RawTreeMonitoringClient({
       ...options,
+      table: options.table ?? DEFAULT_TRACES_TABLE,
       integrations: [],
     });
     this.eventName = options.eventName ?? DEFAULT_EVENT_NAME;

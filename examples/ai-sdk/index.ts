@@ -17,11 +17,8 @@ if (!process.env.AI_GATEWAY_API_KEY && process.env.VERCEL_AI_GATEWAY_API_KEY) {
 
 const rawtree = registerOTel({
   serviceName: "rawtree-ai-sdk-example",
-  rawtree: {
-    apiKey: rawtreeApiKey,
-    table: process.env.RAWTREE_TABLE ?? "events",
-    environment: process.env.NODE_ENV ?? "development",
-  },
+  apiKey: rawtreeApiKey,
+  environment: process.env.NODE_ENV ?? "development",
   integrations: [
     aiSdkIntegration(),
   ],

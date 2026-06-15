@@ -225,12 +225,8 @@ describe("RawTree", () => {
     const otel = registerOTel({
       serviceName: "api",
       spanProcessor: "simple",
-      rawtree: {
-        apiKey: "rw_test",
-        fetch: fetchMock,
-        table: "otel_events",
-        batch: { intervalMs: 60_000 },
-      },
+      apiKey: "rw_test",
+      fetch: fetchMock,
     });
 
     try {
@@ -250,7 +246,7 @@ describe("RawTree", () => {
     }
 
     const rows = fetchMock.mock.calls.flatMap((call) => JSON.parse(call[1]?.body as string));
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.rawtree.com/v1/tables/otel_events");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.rawtree.com/v1/tables/traces");
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       type: "otel.span",

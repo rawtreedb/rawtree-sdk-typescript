@@ -11,15 +11,28 @@ import {
 import { RawTreeTraceExporter, type RawTreeTraceExporterOptions } from "./exporter.js";
 import { registerRawTreeTracerProvider } from "./integrations/otel.js";
 
-export interface RawTreeRegisterOtelOptions {
+export interface RawTreeRegisterOtelBaseOptions {
   serviceName?: string;
-  rawtree: RawTreeTraceExporterOptions | RawTreeTraceExporter;
   integrations?: RawTreeIntegration[];
   spanProcessor?: "batch" | "simple" | SpanProcessor;
-  batch?: BufferConfig;
+  batchSpanProcessorOptions?: BufferConfig;
   forceRegisterProvider?: boolean;
   unregisterOnShutdown?: boolean;
 }
+
+export interface RawTreeRegisterOtelExporterOptions extends RawTreeRegisterOtelBaseOptions {
+  exporter: RawTreeTraceExporter;
+}
+
+export interface RawTreeRegisterOtelRawTreeOptions
+  extends RawTreeRegisterOtelBaseOptions,
+    Omit<RawTreeTraceExporterOptions, "service" | "table" | "batch"> {
+  exporter?: never;
+}
+
+export type RawTreeRegisterOtelOptions =
+  | RawTreeRegisterOtelExporterOptions
+  | RawTreeRegisterOtelRawTreeOptions;
 
 export interface RawTreeOtelHandle {
   exporter: RawTreeTraceExporter;
@@ -106,14 +119,31 @@ export function registerOTel(options: RawTreeRegisterOtelOptions): RawTreeOtelHa
 }
 
 function toExporter(options: RawTreeRegisterOtelOptions): RawTreeTraceExporter {
-  if (options.rawtree instanceof RawTreeTraceExporter) {
-    return options.rawtree;
+  if (hasCustomExporter(options)) {
+    return options.exporter;
   }
 
+  const {
+    serviceName,
+    exporter: _exporter,
+    integrations: _integrations,
+    spanProcessor: _spanProcessor,
+    batchSpanProcessorOptions: _batchSpanProcessorOptions,
+    forceRegisterProvider: _forceRegisterProvider,
+    unregisterOnShutdown: _unregisterOnShutdown,
+    ...exporterOptions
+  } = options;
+
   return new RawTreeTraceExporter({
-    ...options.rawtree,
-    service: options.rawtree.service ?? options.serviceName,
+    ...exporterOptions,
+    service: serviceName,
   });
+}
+
+function hasCustomExporter(
+  options: RawTreeRegisterOtelOptions,
+): options is RawTreeRegisterOtelExporterOptions {
+  return options.exporter instanceof RawTreeTraceExporter;
 }
 
 function toSpanProcessor(
@@ -128,7 +158,7 @@ function toSpanProcessor(
     return new SimpleSpanProcessor(exporter);
   }
 
-  return new BatchSpanProcessor(exporter, options.batch);
+  return new BatchSpanProcessor(exporter, options.batchSpanProcessorOptions);
 }
 
 function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> {

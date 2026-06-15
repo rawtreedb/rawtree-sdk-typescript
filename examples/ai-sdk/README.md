@@ -11,7 +11,7 @@ exporter, so every OpenTelemetry span in the process can be sent to RawTree.
 
 It sends this event type to RawTree:
 
-- `otel.span`
+- `otel.span` rows in the `traces` table
 
 The harness packages are canary/experimental, so expect churn.
 
@@ -28,7 +28,6 @@ Required environment:
 
 ```sh
 export RAWTREE_API_KEY=...
-export RAWTREE_TABLE=events
 ```
 
 You will also need Vercel Sandbox auth and Claude Code model auth. For Vercel AI

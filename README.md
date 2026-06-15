@@ -40,7 +40,7 @@ const schema = await rawtree.tables.describe("events");
 ## Monitoring
 
 RawTree can also be used as an OpenTelemetry sink. Register RawTree as the OTel
-exporter, add integrations, and send spans into a RawTree table. For AI SDK 7,
+exporter, add integrations, and send trace spans to RawTree. For AI SDK 7,
 install `@ai-sdk/otel`; RawTree will register AI SDK's official OpenTelemetry
 integration for you when `aiSdkIntegration()` is enabled.
 
@@ -62,11 +62,8 @@ import { registerOTel, aiSdkIntegration } from "@rawtree/otel";
 
 const rawtree = registerOTel({
   serviceName: "ai-sdk",
-  rawtree: {
-    apiKey: process.env.RAWTREE_API_KEY!,
-    table: "events",
-    environment: "production",
-  },
+  apiKey: process.env.RAWTREE_API_KEY!,
+  environment: "production",
   integrations: [
     aiSdkIntegration(),
   ],
@@ -100,9 +97,11 @@ try {
 }
 ```
 
-OpenTelemetry spans are stored as `otel.span` with the original span name,
-attributes, resource, scope, and timing preserved in the payload. Spans created
-under the same active context share `trace_id`, `span_id`, and `parent_span_id`.
+OpenTelemetry trace spans are stored in the `traces` table as `otel.span` with
+the original span name, attributes, resource, scope, and timing preserved in the
+payload. Spans created under the same active context share `trace_id`, `span_id`,
+and `parent_span_id`. Future log and metric exporters should follow the same
+signal naming convention with `logs` and `metrics` tables by default.
 
 The Sentry-style monitoring client is still available for manual events:
 
