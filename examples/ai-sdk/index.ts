@@ -18,7 +18,7 @@ if (!process.env.AI_GATEWAY_API_KEY && process.env.VERCEL_AI_GATEWAY_API_KEY) {
 const rawtree = initRawTree({
   apiKey: rawtreeApiKey,
   table: process.env.RAWTREE_TABLE ?? "events",
-  service: "rawtree-harness-agent-example",
+  service: "rawtree-ai-sdk-example",
   environment: process.env.NODE_ENV ?? "development",
   integrations: [
     aiSdkIntegration(),
@@ -26,7 +26,7 @@ const rawtree = initRawTree({
 });
 
 const agent = new HarnessAgent({
-  id: "rawtree-harness-agent-example",
+  id: "rawtree-ai-sdk-example",
   harness: claudeCode,
   sandbox: createVercelSandbox({
     runtime: "node24",
@@ -81,7 +81,7 @@ const agent = new HarnessAgent({
   telemetry: {
     recordInputs: true,
     recordOutputs: true,
-    functionId: "harness-agent-vercel-example",
+    functionId: "ai-sdk-example",
   },
   debug: {
     enabled: true,

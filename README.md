@@ -49,38 +49,55 @@ OpenTelemetry integration for you when `aiSdkIntegration()` is enabled.
 npm install @rawtree/otel
 ```
 
-Install the tools you want to monitor as peers. For AI SDK v7 telemetry:
+Install the tools you want to monitor as peers. For the AI SDK harness example:
 
 ```sh
-npm install ai @ai-sdk/otel
+npm install ai @ai-sdk/otel @ai-sdk/harness @ai-sdk/harness-claude-code @ai-sdk/sandbox-vercel
 ```
 
 ```ts
+import { HarnessAgent } from "@ai-sdk/harness/agent";
+import { claudeCode } from "@ai-sdk/harness-claude-code";
+import { createVercelSandbox } from "@ai-sdk/sandbox-vercel";
 import { initRawTree, aiSdkIntegration } from "@rawtree/otel";
-import { generateText } from "ai";
-import { openai } from "@ai-sdk/openai";
 
 const rawtree = initRawTree({
   apiKey: process.env.RAWTREE_API_KEY!,
   table: "events",
-  service: "api",
+  service: "ai-sdk",
   environment: "production",
   integrations: [
     aiSdkIntegration(),
   ],
 });
 
-await generateText({
-  model: openai(process.env.OPENAI_MODEL ?? "gpt-4o"),
-  prompt: "Explain RawTree in one sentence.",
-  experimental_telemetry: {
-    isEnabled: true,
+const agent = new HarnessAgent({
+  id: "support-agent",
+  harness: claudeCode,
+  sandbox: createVercelSandbox({ runtime: "node24" }),
+  telemetry: {
     recordInputs: true,
     recordOutputs: true,
+    functionId: "support-agent",
   },
 });
 
-await rawtree.flush();
+const session = await agent.createSession();
+
+try {
+  const result = await agent.stream({
+    session,
+    prompt: "Investigate checkout latency and suggest a mitigation.",
+  });
+
+  for await (const _part of result.fullStream) {
+    // Consume the stream so the agent run completes.
+  }
+} finally {
+  await session.destroy();
+  await rawtree.flush();
+  await rawtree.close();
+}
 ```
 
 AI SDK spans are stored as `ai.sdk.otel.span` with the original span name,
@@ -99,12 +116,9 @@ await rawtree.span("billing.charge", async () => {
 });
 ```
 
-See `examples/ai-sdk-openai` for a runnable OpenAI + AI SDK example with multiple
-AI SDK tools. It expects `RAWTREE_API_KEY` and `OPENAI_API_KEY`.
-
-See `examples/harness-agent-vercel` for the AI SDK canary `HarnessAgent` flow
-with Claude Code running in Vercel Sandbox. It expects `RAWTREE_API_KEY`, plus
-whatever credentials your Claude Code and Vercel Sandbox setup require.
+See `examples/ai-sdk` for the AI SDK canary `HarnessAgent` flow with Claude
+Code running in Vercel Sandbox. It expects `RAWTREE_API_KEY`, plus whatever
+credentials your Claude Code and Vercel Sandbox setup require.
 
 ## API
 
