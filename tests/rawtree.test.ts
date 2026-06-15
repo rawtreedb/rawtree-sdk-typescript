@@ -1,10 +1,11 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { generateText } from "ai";
-import { trace } from "@opentelemetry/api";
+import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { RawTree, RawTreeError, type QueryResponse } from "../packages/sdk/src/index.js";
 import {
   aiSdkIntegration,
   initRawTree,
+  registerOTel,
 } from "../packages/otel/src/index.js";
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
@@ -217,6 +218,60 @@ describe("RawTree", () => {
     await rawtree.flush();
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("registers OpenTelemetry with a RawTree exporter", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const otel = registerOTel({
+      serviceName: "api",
+      spanProcessor: "simple",
+      rawtree: {
+        apiKey: "rw_test",
+        fetch: fetchMock,
+        table: "otel_events",
+        batch: { intervalMs: 60_000 },
+      },
+    });
+
+    try {
+      const tracer = trace.getTracer("rawtree-register-otel-test");
+      const span = tracer.startSpan("GET /api/chat", {
+        attributes: {
+          "http.route": "/api/chat",
+          "app.tenant": "team_123",
+        },
+      });
+      span.setStatus({ code: SpanStatusCode.OK });
+      span.end();
+
+      await otel.shutdown();
+    } finally {
+      await otel.shutdown().catch(() => undefined);
+    }
+
+    const rows = fetchMock.mock.calls.flatMap((call) => JSON.parse(call[1]?.body as string));
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.rawtree.com/v1/tables/otel_events");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      type: "otel.span",
+      source: "otel",
+      service: "api",
+      status: "ok",
+      payload: {
+        name: "GET /api/chat",
+        kind: "internal",
+        attributes: {
+          "http.route": "/api/chat",
+          "app.tenant": "team_123",
+        },
+        scope: {
+          name: "rawtree-register-otel-test",
+        },
+      },
+    });
+    expect(rows[0]?.trace_id).toEqual(expect.any(String));
+    expect(rows[0]?.span_id).toEqual(expect.any(String));
+    expect(rows[0]?.duration_ms).toEqual(expect.any(Number));
   });
 
   it("captures AI SDK generate spans through OpenTelemetry in-process", async () => {

@@ -3,7 +3,7 @@ import { claudeCode } from "@ai-sdk/harness-claude-code";
 import { createVercelSandbox } from "@ai-sdk/sandbox-vercel";
 import { tool } from "ai";
 import { z } from "zod";
-import { initRawTree, aiSdkIntegration } from "@rawtree/otel";
+import { registerOTel, aiSdkIntegration } from "@rawtree/otel";
 
 const rawtreeApiKey = process.env.RAWTREE_API_KEY;
 
@@ -15,11 +15,13 @@ if (!process.env.AI_GATEWAY_API_KEY && process.env.VERCEL_AI_GATEWAY_API_KEY) {
   process.env.AI_GATEWAY_API_KEY = process.env.VERCEL_AI_GATEWAY_API_KEY;
 }
 
-const rawtree = initRawTree({
-  apiKey: rawtreeApiKey,
-  table: process.env.RAWTREE_TABLE ?? "events",
-  service: "rawtree-ai-sdk-example",
-  environment: process.env.NODE_ENV ?? "development",
+const rawtree = registerOTel({
+  serviceName: "rawtree-ai-sdk-example",
+  rawtree: {
+    apiKey: rawtreeApiKey,
+    table: process.env.RAWTREE_TABLE ?? "events",
+    environment: process.env.NODE_ENV ?? "development",
+  },
   integrations: [
     aiSdkIntegration(),
   ],
@@ -109,6 +111,5 @@ try {
   process.stdout.write("\n");
 } finally {
   await session.destroy();
-  await rawtree.flush();
-  await rawtree.close();
+  await rawtree.shutdown();
 }

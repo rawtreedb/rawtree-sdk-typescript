@@ -2,7 +2,8 @@
 
 This example tries the AI SDK canary harness APIs with RawTree telemetry. It
 installs `@ai-sdk/otel`, and `aiSdkIntegration()` registers AI SDK's official
-OpenTelemetry integration before RawTree ingests the spans.
+OpenTelemetry integration. `registerOTel()` installs RawTree as the span
+exporter, so every OpenTelemetry span in the process can be sent to RawTree.
 
 - `HarnessAgent` from `@ai-sdk/harness/agent`
 - `claudeCode` from `@ai-sdk/harness-claude-code`
@@ -10,7 +11,7 @@ OpenTelemetry integration before RawTree ingests the spans.
 
 It sends this event type to RawTree:
 
-- `ai.sdk.otel.span`
+- `otel.span`
 
 The harness packages are canary/experimental, so expect churn.
 

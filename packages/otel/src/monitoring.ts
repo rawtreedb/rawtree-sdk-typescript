@@ -56,10 +56,17 @@ export interface RawTreeIntegrationRegistry {}
 
 export type RawTreeIntegrationTeardown = () => void | Promise<void>;
 
+export interface RawTreeOtelIntegrationContext {
+  serviceName?: string;
+}
+
 export interface RawTreeIntegration {
   name: string;
-  setup: (
+  setup?: (
     client: RawTreeMonitoringClient,
+  ) => void | RawTreeIntegrationTeardown | Promise<void | RawTreeIntegrationTeardown>;
+  setupOtel?: (
+    context: RawTreeOtelIntegrationContext,
   ) => void | RawTreeIntegrationTeardown | Promise<void | RawTreeIntegrationTeardown>;
 }
 
@@ -180,6 +187,10 @@ export class RawTreeMonitoringClient {
   }
 
   addIntegration(integration: RawTreeIntegration): void {
+    if (!integration.setup) {
+      return;
+    }
+
     const setupTask = Promise.resolve(integration.setup(this))
       .then((teardown) => {
         if (typeof teardown === "function") {

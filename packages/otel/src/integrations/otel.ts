@@ -15,10 +15,21 @@ export interface RawTreeOtelRegistrationOptions {
   unregisterOnClose?: boolean;
 }
 
+export interface RawTreeTracerProviderRegistrationOptions extends RawTreeOtelRegistrationOptions {
+  spanProcessors?: SpanProcessor[];
+}
+
 export interface RawTreeOtelProcessorRegistration {
   isEnabled: boolean;
   providerRegistered: boolean;
   teardown: () => Promise<void>;
+}
+
+export interface RawTreeTracerProviderRegistration {
+  isEnabled: boolean;
+  providerRegistered: boolean;
+  created: boolean;
+  shutdown: () => Promise<void>;
 }
 
 export interface RawTreeOtelSpanSummaryOptions {
@@ -36,9 +47,9 @@ export function registerRawTreeSpanProcessor(
   processor: SpanProcessor,
   options: RawTreeOtelRegistrationOptions = {},
 ): RawTreeOtelProcessorRegistration {
-  const providerRegistered = ensureRawTreeTracerProvider(options);
+  const registration = ensureRawTreeTracerProvider(options);
 
-  if (!providerRegistered) {
+  if (!registration.providerRegistered) {
     return {
       isEnabled: false,
       providerRegistered: false,
@@ -58,7 +69,7 @@ export function registerRawTreeSpanProcessor(
 
   return {
     isEnabled: true,
-    providerRegistered: true,
+    providerRegistered: registration.providerRegistered,
     teardown: async () => {
       if (isTornDown) {
         return;
@@ -69,14 +80,45 @@ export function registerRawTreeSpanProcessor(
       await processor.shutdown();
 
       if (processorHost.size === 0 && provider && isActiveProvider(provider) && shouldUnregisterProvider) {
-        const providerToShutdown = provider;
-        provider = undefined;
-        shouldUnregisterProvider = true;
-        trace.disable();
-        await providerToShutdown.shutdown();
+        await shutdownRawTreeTracerProvider();
       }
     },
   };
+}
+
+export function registerRawTreeTracerProvider(
+  options: RawTreeTracerProviderRegistrationOptions = {},
+): RawTreeTracerProviderRegistration {
+  const registration = ensureRawTreeTracerProvider(options, options.spanProcessors ?? []);
+
+  return {
+    isEnabled: registration.providerRegistered,
+    providerRegistered: registration.providerRegistered,
+    created: registration.created,
+    shutdown: async () => {
+      if (options.unregisterOnClose === false) {
+        return;
+      }
+
+      await shutdownRawTreeTracerProvider();
+    },
+  };
+}
+
+export async function shutdownRawTreeTracerProvider(): Promise<void> {
+  if (!provider) {
+    return;
+  }
+
+  const providerToShutdown = provider;
+  provider = undefined;
+  shouldUnregisterProvider = true;
+
+  if (isActiveProvider(providerToShutdown)) {
+    trace.disable();
+  }
+
+  await providerToShutdown.shutdown();
 }
 
 export function summarizeOtelSpan(
@@ -178,23 +220,35 @@ export function normalizeValue(value: unknown): unknown {
   return String(value);
 }
 
-function ensureRawTreeTracerProvider(options: RawTreeOtelRegistrationOptions): boolean {
+function ensureRawTreeTracerProvider(
+  options: RawTreeOtelRegistrationOptions,
+  spanProcessors: SpanProcessor[] = [],
+): { providerRegistered: boolean; created: boolean } {
   if (provider) {
-    return isActiveProvider(provider);
+    return {
+      providerRegistered: isActiveProvider(provider),
+      created: false,
+    };
   }
 
   if (!options.forceRegisterProvider && hasExistingTracerProvider()) {
-    return false;
+    return {
+      providerRegistered: false,
+      created: false,
+    };
   }
 
   const nextProvider = new NodeTracerProvider({
-    spanProcessors: [processorHost],
+    spanProcessors: [...spanProcessors, processorHost],
   });
 
   nextProvider.register();
   provider = isActiveProvider(nextProvider) ? nextProvider : undefined;
 
-  return provider !== undefined;
+  return {
+    providerRegistered: provider !== undefined,
+    created: provider !== undefined,
+  };
 }
 
 function hasExistingTracerProvider(): boolean {

@@ -89,6 +89,13 @@ export function aiSdkIntegration(
         await registration.teardown();
       };
     },
+    setupOtel() {
+      const registration = enableAISDKOpenTelemetry(options);
+
+      return () => {
+        registration.teardown?.();
+      };
+    },
   };
 }
 

@@ -39,11 +39,10 @@ const schema = await rawtree.tables.describe("events");
 
 ## Monitoring
 
-RawTree can also be used as a Sentry-style monitoring sink. Initialize a monitoring
-client, add integrations, and flush events into a RawTree table. The AI SDK
-integration captures AI SDK OpenTelemetry spans when the SDK emits them. For
-AI SDK 7, install `@ai-sdk/otel`; RawTree will register AI SDK's official
-OpenTelemetry integration for you when `aiSdkIntegration()` is enabled.
+RawTree can also be used as an OpenTelemetry sink. Register RawTree as the OTel
+exporter, add integrations, and send spans into a RawTree table. For AI SDK 7,
+install `@ai-sdk/otel`; RawTree will register AI SDK's official OpenTelemetry
+integration for you when `aiSdkIntegration()` is enabled.
 
 ```sh
 npm install @rawtree/otel
@@ -59,13 +58,15 @@ npm install ai @ai-sdk/otel @ai-sdk/harness @ai-sdk/harness-claude-code @ai-sdk/
 import { HarnessAgent } from "@ai-sdk/harness/agent";
 import { claudeCode } from "@ai-sdk/harness-claude-code";
 import { createVercelSandbox } from "@ai-sdk/sandbox-vercel";
-import { initRawTree, aiSdkIntegration } from "@rawtree/otel";
+import { registerOTel, aiSdkIntegration } from "@rawtree/otel";
 
-const rawtree = initRawTree({
-  apiKey: process.env.RAWTREE_API_KEY!,
-  table: "events",
-  service: "ai-sdk",
-  environment: "production",
+const rawtree = registerOTel({
+  serviceName: "ai-sdk",
+  rawtree: {
+    apiKey: process.env.RAWTREE_API_KEY!,
+    table: "events",
+    environment: "production",
+  },
   integrations: [
     aiSdkIntegration(),
   ],
@@ -95,25 +96,33 @@ try {
   }
 } finally {
   await session.destroy();
-  await rawtree.flush();
-  await rawtree.close();
+  await rawtree.shutdown();
 }
 ```
 
-AI SDK spans are stored as `ai.sdk.otel.span` with the original span name,
+OpenTelemetry spans are stored as `otel.span` with the original span name,
 attributes, resource, scope, and timing preserved in the payload. Spans created
 under the same active context share `trace_id`, `span_id`, and `parent_span_id`.
 
-Manual events are supported too:
+The Sentry-style monitoring client is still available for manual events:
 
 ```ts
-rawtree.capture("checkout.started", {
+import { initRawTree } from "@rawtree/otel";
+
+const monitor = initRawTree({
+  apiKey: process.env.RAWTREE_API_KEY!,
+  table: "events",
+});
+
+monitor.capture("checkout.started", {
   userId: "u_123",
 });
 
-await rawtree.span("billing.charge", async () => {
+await monitor.span("billing.charge", async () => {
   await chargeCustomer();
 });
+
+await monitor.flush();
 ```
 
 See `examples/ai-sdk` for the AI SDK canary `HarnessAgent` flow with Claude
