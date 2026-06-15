@@ -14,17 +14,14 @@
     "./ai-sdk": {
       "types": "./dist/integrations/ai-sdk.d.ts",
       "import": "./dist/integrations/ai-sdk.js"
-    },
-    "./daytona": {
-      "types": "./dist/integrations/daytona.d.ts",
-      "import": "./dist/integrations/daytona.js"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "npm run clean && tsc -p tsconfig.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "keywords": [
@@ -42,14 +39,10 @@
   },
   "peerDependencies": {
     "@ai-sdk/otel": "^1.0.0-0",
-    "@daytona/sdk": "^0.187.0",
     "ai": "^6.0.204 || ^7.0.0-0"
   },
   "peerDependenciesMeta": {
     "@ai-sdk/otel": {
-      "optional": true
-    },
-    "@daytona/sdk": {
       "optional": true
     },
     "ai": {

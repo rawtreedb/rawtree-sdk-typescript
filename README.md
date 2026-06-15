@@ -8,7 +8,7 @@ TypeScript packages for building apps with RawTree.
 
 - `@rawtree/sdk`: RawTree API client for query, insert, and table metadata.
 - `@rawtree/otel`: Sentry-style monitoring client, shared OpenTelemetry setup,
-  and optional integrations such as AI SDK and Daytona.
+  and optional AI SDK integration.
 
 ## Install
 
@@ -56,7 +56,7 @@ npm install ai @ai-sdk/otel
 ```
 
 ```ts
-import { initRawTree, aiSdkIntegration, daytonaIntegration } from "@rawtree/otel";
+import { initRawTree, aiSdkIntegration } from "@rawtree/otel";
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 
@@ -67,7 +67,6 @@ const rawtree = initRawTree({
   environment: "production",
   integrations: [
     aiSdkIntegration(),
-    daytonaIntegration(),
   ],
 });
 
@@ -85,10 +84,8 @@ await rawtree.flush();
 ```
 
 AI SDK spans are stored as `ai.sdk.otel.span` with the original span name,
-attributes, resource, scope, and timing preserved in the payload. Daytona spans
-are stored as `daytona.otel.span`. Both integrations use the same in-process
-OpenTelemetry provider, so spans created under the same active context share
-`trace_id`, `span_id`, and `parent_span_id`.
+attributes, resource, scope, and timing preserved in the payload. Spans created
+under the same active context share `trace_id`, `span_id`, and `parent_span_id`.
 
 Manual events are supported too:
 
@@ -108,12 +105,6 @@ AI SDK tools. It expects `RAWTREE_API_KEY` and `OPENAI_API_KEY`.
 See `examples/harness-agent-vercel` for the AI SDK canary `HarnessAgent` flow
 with Claude Code running in Vercel Sandbox. It expects `RAWTREE_API_KEY`, plus
 whatever credentials your Claude Code and Vercel Sandbox setup require.
-
-See `examples/harness-agent-daytona` for the same `HarnessAgent` flow running
-in a Daytona sandbox. It sends both AI SDK telemetry and Daytona OpenTelemetry
-spans to RawTree. It expects `RAWTREE_API_KEY`, `DAYTONA_API_KEY`, and Claude
-Code model credentials. RawTree captures Daytona spans in-process through the
-shared provider; you do not need to enable Daytona's OTLP exporter.
 
 ## API
 

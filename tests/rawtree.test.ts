@@ -1,10 +1,9 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { generateText } from "ai";
-import { SpanStatusCode, trace } from "@opentelemetry/api";
+import { trace } from "@opentelemetry/api";
 import { RawTree, RawTreeError, type QueryResponse } from "../packages/sdk/src/index.js";
 import {
   aiSdkIntegration,
-  daytonaIntegration,
   initRawTree,
 } from "../packages/otel/src/index.js";
 
@@ -428,79 +427,5 @@ describe("RawTree", () => {
     expect(generateContentSpan?.parent_span_id).toBe(agentStepSpan?.span_id);
     expect(toolSpan?.trace_id).toBe(invokeAgentSpan?.trace_id);
     expect(toolSpan?.parent_span_id).toBe(agentStepSpan?.span_id);
-  });
-
-  it("captures Daytona spans through OpenTelemetry in-process", async () => {
-    const previousEndpoint = process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT;
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
-    const rawtree = initRawTree({
-      apiKey: "rw_test",
-      fetch: fetchMock,
-      table: "daytona_events",
-      integrations: [
-        daytonaIntegration({
-          componentNames: ["Daytona"],
-        }),
-      ],
-      batch: { intervalMs: 60_000 },
-    });
-
-    try {
-      expect(rawtree.integrations.daytona).toMatchObject({
-        isEnabled: true,
-        providerRegistered: true,
-      });
-      expect(rawtree.integrations.daytona.capturedComponents).toContain("Daytona");
-      expect(process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT).toBe(previousEndpoint);
-
-      const tracer = trace.getTracer("rawtree-daytona-test");
-      const ignoredSpan = tracer.startSpan("Other.create", {
-        attributes: {
-          component: "Other",
-          method: "create",
-        },
-      });
-      ignoredSpan.end();
-
-      const span = tracer.startSpan("Daytona.create", {
-        attributes: {
-          component: "Daytona",
-          method: "create",
-          "http.response.status_code": 200,
-        },
-      });
-      span.setStatus({ code: SpanStatusCode.OK });
-      span.end();
-
-      await rawtree.flush();
-      await rawtree.close();
-
-      const rows = fetchMock.mock.calls.flatMap((call) => JSON.parse(call[1]?.body as string));
-      expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.rawtree.com/v1/tables/daytona_events");
-      expect(rows[0]).toMatchObject({
-        type: "daytona.otel.span",
-        source: "daytona",
-        status: "ok",
-        payload: {
-          name: "Daytona.create",
-          kind: "internal",
-          attributes: {
-            component: "Daytona",
-            method: "create",
-            "http.response.status_code": 200,
-          },
-          scope: {
-            name: "rawtree-daytona-test",
-          },
-        },
-      });
-      expect(rows).toHaveLength(1);
-      expect(rows[0]?.duration_ms).toEqual(expect.any(Number));
-      expect(rows[0]?.trace_id).toEqual(expect.any(String));
-      expect(rows[0]?.span_id).toEqual(expect.any(String));
-    } finally {
-      await rawtree.close().catch(() => undefined);
-      expect(process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT).toBe(previousEndpoint);
-    }
   });
 });
