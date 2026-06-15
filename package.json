@@ -18,6 +18,10 @@
     "./integrations/ai-sdk": {
       "types": "./dist/integrations/ai-sdk.d.ts",
       "import": "./dist/integrations/ai-sdk.js"
+    },
+    "./integrations/daytona": {
+      "types": "./dist/integrations/daytona.d.ts",
+      "import": "./dist/integrations/daytona.js"
     }
   },
   "files": [
@@ -50,5 +54,10 @@
     "typescript": "^5.9.3",
     "vitest": "^3.2.6",
     "zod": "^4.4.3"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/sdk-trace-base": "^2.8.0",
+    "@opentelemetry/sdk-trace-node": "^2.8.0"
   }
 }
