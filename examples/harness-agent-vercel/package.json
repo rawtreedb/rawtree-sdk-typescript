@@ -8,8 +8,10 @@
   "dependencies": {
     "@ai-sdk/harness": "1.0.0-canary.10",
     "@ai-sdk/harness-claude-code": "1.0.0-canary.6",
+    "@ai-sdk/otel": "1.0.0-canary.120",
     "@ai-sdk/sandbox-vercel": "1.0.0-canary.10",
-    "@rawtree/sdk": "file:../..",
+    "@rawtree/otel": "file:../../packages/otel",
+    "@rawtree/sdk": "file:../../packages/sdk",
     "ai": "7.0.0-canary.174",
     "tsx": "^4.20.6",
     "ws": "^8.20.1",

@@ -2,14 +2,12 @@
 
 This example runs the AI SDK canary `HarnessAgent` with Claude Code in a Daytona
 sandbox while sending AI SDK telemetry and Daytona OpenTelemetry spans to
-RawTree. AI SDK canary telemetry is bridged into OpenTelemetry spans before
-RawTree ingests it.
+RawTree. It installs `@ai-sdk/otel`, and `aiSdkIntegration()` registers AI SDK's
+official OpenTelemetry integration before RawTree ingests the spans.
 
-It sends these event families to RawTree:
+It sends these event types to RawTree:
 
-- `ai.sdk.invoke_agent`
-- `ai.sdk.generate_content`
-- `ai.sdk.execute_tool`
+- `ai.sdk.otel.span`
 - `daytona.otel.span`
 
 The Daytona adapter in this folder is intentionally example-local while the AI

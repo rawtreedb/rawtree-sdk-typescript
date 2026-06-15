@@ -6,7 +6,8 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.71",
-    "@rawtree/sdk": "file:../..",
+    "@rawtree/otel": "file:../../packages/otel",
+    "@rawtree/sdk": "file:../../packages/sdk",
     "ai": "^6.0.204",
     "tsx": "^4.20.6",
     "zod": "^4.4.3"

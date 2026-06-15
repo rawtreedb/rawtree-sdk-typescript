@@ -1,8 +1,7 @@
 import { generateText, stepCountIs, tool } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
-import { initRawTree } from "@rawtree/sdk/monitoring";
-import { aiSdkIntegration } from "@rawtree/sdk/integrations/ai-sdk";
+import { initRawTree, aiSdkIntegration } from "@rawtree/otel";
 
 const rawtreeApiKey = process.env.RAWTREE_API_KEY;
 
@@ -20,10 +19,7 @@ const rawtree = initRawTree({
   service: "rawtree-ai-sdk-example",
   environment: process.env.NODE_ENV ?? "development",
   integrations: [
-    aiSdkIntegration({
-      captureInputs: true,
-      captureOutputs: true,
-    }),
+    aiSdkIntegration(),
   ],
 });
 

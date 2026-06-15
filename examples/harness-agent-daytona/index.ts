@@ -2,9 +2,7 @@ import { HarnessAgent } from "@ai-sdk/harness/agent";
 import { claudeCode } from "@ai-sdk/harness-claude-code";
 import { tool } from "ai";
 import { z } from "zod";
-import { initRawTree } from "@rawtree/sdk/monitoring";
-import { aiSdkIntegration } from "@rawtree/sdk/integrations/ai-sdk";
-import { daytonaIntegration } from "@rawtree/sdk/integrations/daytona";
+import { initRawTree, aiSdkIntegration, daytonaIntegration } from "@rawtree/otel";
 import { createDaytonaSandbox } from "./daytona-sandbox.js";
 
 const rawtreeApiKey = process.env.RAWTREE_API_KEY;
@@ -23,12 +21,7 @@ const rawtree = initRawTree({
   service: "rawtree-harness-agent-daytona-example",
   environment: process.env.NODE_ENV ?? "development",
   integrations: [
-    aiSdkIntegration({
-      captureInputs: true,
-      captureOutputs: true,
-      captureToolCalls: true,
-      captureProviderMetadata: true,
-    }),
+    aiSdkIntegration(),
     daytonaIntegration(),
   ],
 });
@@ -93,7 +86,6 @@ const agent = new HarnessAgent({
     }),
   },
   telemetry: {
-    isEnabled: true,
     recordInputs: true,
     recordOutputs: true,
     functionId: "harness-agent-daytona-example",

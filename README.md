@@ -2,7 +2,13 @@
 
 > Experimental: this SDK is early and its public API may change before a stable release.
 
-TypeScript SDK for building apps with RawTree.
+TypeScript packages for building apps with RawTree.
+
+## Packages
+
+- `@rawtree/sdk`: RawTree API client for query, insert, and table metadata.
+- `@rawtree/otel`: Sentry-style monitoring client, shared OpenTelemetry setup,
+  and optional integrations such as AI SDK and Daytona.
 
 ## Install
 
@@ -35,13 +41,22 @@ const schema = await rawtree.tables.describe("events");
 
 RawTree can also be used as a Sentry-style monitoring sink. Initialize a monitoring
 client, add integrations, and flush events into a RawTree table. The AI SDK
-integration captures AI SDK OpenTelemetry spans when the SDK emits them, and
-bridges the AI SDK v7 telemetry integration hooks into OpenTelemetry spans.
+integration captures AI SDK OpenTelemetry spans when the SDK emits them. For
+AI SDK 7, install `@ai-sdk/otel`; RawTree will register AI SDK's official
+OpenTelemetry integration for you when `aiSdkIntegration()` is enabled.
+
+```sh
+npm install @rawtree/otel
+```
+
+Install the tools you want to monitor as peers. For AI SDK v7 telemetry:
+
+```sh
+npm install ai @ai-sdk/otel
+```
 
 ```ts
-import { initRawTree } from "@rawtree/sdk/monitoring";
-import { aiSdkIntegration } from "@rawtree/sdk/integrations/ai-sdk";
-import { daytonaIntegration } from "@rawtree/sdk/integrations/daytona";
+import { initRawTree, aiSdkIntegration, daytonaIntegration } from "@rawtree/otel";
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 
@@ -51,10 +66,7 @@ const rawtree = initRawTree({
   service: "api",
   environment: "production",
   integrations: [
-    aiSdkIntegration({
-      captureInputs: false,
-      captureOutputs: false,
-    }),
+    aiSdkIntegration(),
     daytonaIntegration(),
   ],
 });
@@ -72,11 +84,11 @@ await generateText({
 await rawtree.flush();
 ```
 
-AI SDK spans are stored as event families such as `ai.sdk.invoke_agent`,
-`ai.sdk.generate_content`, and `ai.sdk.execute_tool`. Daytona spans are stored
-as `daytona.otel.span`. Both integrations use the same in-process OpenTelemetry
-provider, so spans created under the same active context share `trace_id`,
-`span_id`, and `parent_span_id`.
+AI SDK spans are stored as `ai.sdk.otel.span` with the original span name,
+attributes, resource, scope, and timing preserved in the payload. Daytona spans
+are stored as `daytona.otel.span`. Both integrations use the same in-process
+OpenTelemetry provider, so spans created under the same active context share
+`trace_id`, `span_id`, and `parent_span_id`.
 
 Manual events are supported too:
 

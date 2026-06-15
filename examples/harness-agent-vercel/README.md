@@ -1,18 +1,16 @@
 # RawTree AI SDK Harness Agent Example
 
 This example tries the AI SDK canary harness APIs from Vercel with RawTree
-telemetry. RawTree bridges AI SDK canary telemetry into OpenTelemetry spans
-before ingestion.
+telemetry. It installs `@ai-sdk/otel`, and `aiSdkIntegration()` registers AI
+SDK's official OpenTelemetry integration before RawTree ingests the spans.
 
 - `HarnessAgent` from `@ai-sdk/harness/agent`
 - `claudeCode` from `@ai-sdk/harness-claude-code`
 - `createVercelSandbox` from `@ai-sdk/sandbox-vercel`
 
-It sends these event families to RawTree:
+It sends this event type to RawTree:
 
-- `ai.sdk.invoke_agent`
-- `ai.sdk.generate_content`
-- `ai.sdk.execute_tool`
+- `ai.sdk.otel.span`
 
 The harness packages are canary/experimental, so expect churn.
 

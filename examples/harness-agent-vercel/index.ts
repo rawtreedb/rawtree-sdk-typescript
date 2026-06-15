@@ -3,8 +3,7 @@ import { claudeCode } from "@ai-sdk/harness-claude-code";
 import { createVercelSandbox } from "@ai-sdk/sandbox-vercel";
 import { tool } from "ai";
 import { z } from "zod";
-import { initRawTree } from "@rawtree/sdk/monitoring";
-import { aiSdkIntegration } from "@rawtree/sdk/integrations/ai-sdk";
+import { initRawTree, aiSdkIntegration } from "@rawtree/otel";
 
 const rawtreeApiKey = process.env.RAWTREE_API_KEY;
 
@@ -22,12 +21,7 @@ const rawtree = initRawTree({
   service: "rawtree-harness-agent-example",
   environment: process.env.NODE_ENV ?? "development",
   integrations: [
-    aiSdkIntegration({
-      captureInputs: true,
-      captureOutputs: true,
-      captureToolCalls: true,
-      captureProviderMetadata: true,
-    }),
+    aiSdkIntegration(),
   ],
 });
 
@@ -85,7 +79,6 @@ const agent = new HarnessAgent({
     }),
   },
   telemetry: {
-    isEnabled: true,
     recordInputs: true,
     recordOutputs: true,
     functionId: "harness-agent-vercel-example",

@@ -1,4 +1,4 @@
-import { RawTree, type JsonObject, type JsonValue, type RawTreeOptions } from "./index.js";
+import { RawTree, type JsonObject, type JsonValue, type RawTreeOptions } from "@rawtree/sdk";
 
 export type RawTreeEventLevel = "debug" | "info" | "warning" | "error" | "fatal";
 export type RawTreeEventStatus = "ok" | "error";

@@ -1,10 +1,12 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { generateText } from "ai";
 import { SpanStatusCode, trace } from "@opentelemetry/api";
-import { RawTree, RawTreeError, type QueryResponse } from "../src/index.js";
-import { initRawTree } from "../src/monitoring.js";
-import { aiSdkIntegration } from "../src/integrations/ai-sdk.js";
-import { daytonaIntegration } from "../src/integrations/daytona.js";
+import { RawTree, RawTreeError, type QueryResponse } from "../packages/sdk/src/index.js";
+import {
+  aiSdkIntegration,
+  daytonaIntegration,
+  initRawTree,
+} from "../packages/otel/src/index.js";
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body), {
@@ -225,18 +227,15 @@ describe("RawTree", () => {
       fetch: fetchMock,
       table: "ai_events",
       integrations: [
-        aiSdkIntegration({
-          captureInputs: true,
-          captureOutputs: true,
-        }),
+        aiSdkIntegration(),
       ],
       batch: { intervalMs: 60_000 },
     });
     expect(rawtree.integrations.aiSdk).toMatchObject({
       isEnabled: true,
       providerRegistered: true,
+      eventName: "ai.sdk.otel.span",
     });
-    expect(rawtree.integrations.aiSdk.capturedOperations).toContain("invoke_agent");
 
     const usage = {
       inputTokens: { total: 4, noCache: 4, cacheRead: 0, cacheWrite: 0 },
@@ -272,40 +271,29 @@ describe("RawTree", () => {
     await rawtree.close();
 
     const rows = fetchMock.mock.calls.flatMap((call) => JSON.parse(call[1]?.body as string));
-    const invokeAgentSpan = rows.find((row) => row.type === "ai.sdk.invoke_agent");
-    const generateContentSpan = rows.find((row) => row.type === "ai.sdk.generate_content");
+    const invokeAgentSpan = rows.find((row) => row.payload?.name === "ai.generateText");
+    const generateContentSpan = rows.find((row) => row.payload?.name === "ai.generateText.doGenerate");
     expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.rawtree.com/v1/tables/ai_events");
-    expect(rows.find((row) => row.type === "ai.sdk.start")).toBeUndefined();
+    expect(rows.every((row) => row.type === "ai.sdk.otel.span")).toBe(true);
     expect(invokeAgentSpan).toMatchObject({
-      type: "ai.sdk.invoke_agent",
+      type: "ai.sdk.otel.span",
       source: "ai-sdk",
       status: "ok",
       payload: {
-        name: "invoke_agent support-summary",
-        originalName: "ai.generateText",
-        operation: "invoke_agent",
-        operationId: "ai.generateText",
-        provider: "openai",
-        model: "gpt-test",
-        functionId: "support-summary",
+        name: "ai.generateText",
         attributes: {
           "ai.prompt": JSON.stringify({
             prompt: "Say hello",
           }),
-          "gen_ai.operation.name": "invoke_agent",
         },
       },
     });
     expect(generateContentSpan).toMatchObject({
-      type: "ai.sdk.generate_content",
+      type: "ai.sdk.otel.span",
       source: "ai-sdk",
       status: "ok",
       payload: {
-        originalName: "ai.generateText.doGenerate",
-        operation: "generate_content",
-        operationId: "ai.generateText.doGenerate",
-        provider: "openai",
-        model: "gpt-test",
+        name: "ai.generateText.doGenerate",
         attributes: {
           "ai.response.text": "hello",
           "ai.usage.inputTokens": 4,
@@ -318,160 +306,128 @@ describe("RawTree", () => {
     expect(generateContentSpan?.parent_span_id).toBe(invokeAgentSpan?.span_id);
   });
 
-  it("bridges AI SDK telemetry integrations into OpenTelemetry spans", async () => {
-    type TelemetryBridge = {
-      onStart?: (event: unknown) => void;
-      onLanguageModelCallStart?: (event: unknown) => void;
-      onLanguageModelCallEnd?: (event: unknown) => void;
-      onToolExecutionStart?: (event: unknown) => void;
-      onToolExecutionEnd?: (event: unknown) => void;
-      onEnd?: (event: unknown) => void;
-      executeLanguageModelCall?: <T>(options: {
-        callId: string;
-        execute: () => PromiseLike<T>;
-      }) => PromiseLike<T>;
-      executeTool?: <T>(options: {
-        callId: string;
-        toolCallId: string;
-        execute: () => PromiseLike<T>;
-      }) => PromiseLike<T>;
-    };
+  it("captures AI SDK GenAI semantic convention spans through OpenTelemetry", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
     const rawtree = initRawTree({
       apiKey: "rw_test",
       fetch: fetchMock,
       table: "ai_events",
       integrations: [
-        aiSdkIntegration({
-          captureInputs: true,
-          captureOutputs: true,
-        }),
+        aiSdkIntegration(),
       ],
       batch: { intervalMs: 60_000 },
     });
-    const bridge = (globalThis as {
-      AI_SDK_TELEMETRY_INTEGRATIONS?: TelemetryBridge[];
-    }).AI_SDK_TELEMETRY_INTEGRATIONS?.find((integration) => (
-      typeof integration.executeLanguageModelCall === "function"
-    ));
 
-    expect(bridge).toBeDefined();
+    expect(rawtree.integrations.aiSdk.eventName).toBe("ai.sdk.otel.span");
 
-    bridge?.onStart?.({
-      callId: "call_123",
-      operationId: "ai.streamText",
-      provider: "anthropic",
-      modelId: "claude-test",
-      prompt: "Investigate the incident.",
-      tools: {
-        lookupIncident: {},
+    const tracer = trace.getTracer("rawtree-ai-sdk-gen-ai-test");
+    tracer.startActiveSpan("invoke_agent claude-test", {
+      attributes: {
+        "gen_ai.operation.name": "invoke_agent",
+        "gen_ai.provider.name": "anthropic",
+        "gen_ai.request.model": "claude-test",
+        "gen_ai.agent.name": "harness-agent",
+        "gen_ai.input.messages": JSON.stringify([
+          { role: "user", parts: [{ type: "text", content: "Investigate the incident." }] },
+        ]),
       },
-      functionId: "harness-agent",
-    });
-    bridge?.onLanguageModelCallStart?.({
-      callId: "call_123",
-      provider: "anthropic",
-      modelId: "claude-test",
-      messages: [{ role: "user", content: "Investigate the incident." }],
-      tools: [{ name: "lookupIncident" }],
-      functionId: "harness-agent",
-    });
-    await bridge?.executeLanguageModelCall?.({
-      callId: "call_123",
-      execute: async () => "stream-created",
-    });
-    bridge?.onLanguageModelCallEnd?.({
-      callId: "call_123",
-      provider: "anthropic",
-      modelId: "claude-test",
-      finishReason: "tool-calls",
-      usage: {
-        inputTokens: 12,
-        outputTokens: 6,
-        totalTokens: 18,
-      },
-      content: [{ type: "tool-call", toolName: "lookupIncident" }],
-      responseId: "resp_123",
-    });
-    bridge?.onToolExecutionStart?.({
-      callId: "call_123",
-      functionId: "harness-agent",
-      toolCall: {
-        toolCallId: "tool_123",
-        toolName: "lookupIncident",
-        input: { incidentId: "inc_123" },
-      },
-    });
-    await bridge?.executeTool?.({
-      callId: "call_123",
-      toolCallId: "tool_123",
-      execute: async () => ({ severity: "warning" }),
-    });
-    bridge?.onToolExecutionEnd?.({
-      callId: "call_123",
-      toolExecutionMs: 7,
-      toolCall: {
-        toolCallId: "tool_123",
-        toolName: "lookupIncident",
-      },
-      toolOutput: {
-        type: "tool-result",
-        output: { severity: "warning" },
-      },
-    });
-    bridge?.onEnd?.({
-      callId: "call_123",
-      model: {
-        provider: "anthropic",
-        modelId: "claude-test",
-      },
-      finishReason: "stop",
-      text: "Investigated.",
-      totalUsage: {
-        inputTokens: 12,
-        outputTokens: 6,
-        totalTokens: 18,
-      },
+    }, (rootSpan) => {
+      tracer.startActiveSpan("step 1", {
+        attributes: {
+          "gen_ai.operation.name": "agent_step",
+        },
+      }, (stepSpan) => {
+        tracer.startActiveSpan("chat claude-test", {
+          attributes: {
+            "gen_ai.operation.name": "chat",
+            "gen_ai.provider.name": "anthropic",
+            "gen_ai.request.model": "claude-test",
+            "gen_ai.response.id": "resp_123",
+            "gen_ai.usage.input_tokens": 12,
+            "gen_ai.usage.output_tokens": 6,
+            "gen_ai.output.messages": JSON.stringify([
+              { role: "assistant", parts: [{ type: "text", content: "Investigated." }] },
+            ]),
+          },
+        }, (chatSpan) => {
+          chatSpan.end();
+        });
+        tracer.startActiveSpan("execute_tool lookupIncident", {
+          attributes: {
+            "gen_ai.operation.name": "execute_tool",
+            "gen_ai.tool.name": "lookupIncident",
+            "gen_ai.tool.call.id": "tool_123",
+            "gen_ai.tool.type": "function",
+            "gen_ai.tool.call.arguments": JSON.stringify({ incidentId: "inc_123" }),
+            "gen_ai.tool.call.result": JSON.stringify({ severity: "warning" }),
+          },
+        }, (toolSpan) => {
+          toolSpan.end();
+        });
+        stepSpan.end();
+      });
+      rootSpan.end();
     });
 
     await rawtree.flush();
     await rawtree.close();
 
     const rows = fetchMock.mock.calls.flatMap((call) => JSON.parse(call[1]?.body as string));
-    const invokeAgentSpan = rows.find((row) => row.type === "ai.sdk.invoke_agent");
-    const generateContentSpan = rows.find((row) => row.type === "ai.sdk.generate_content");
-    const toolSpan = rows.find((row) => row.type === "ai.sdk.execute_tool");
+    const invokeAgentSpan = rows.find((row) => row.payload?.name === "invoke_agent claude-test");
+    const agentStepSpan = rows.find((row) => row.payload?.name === "step 1");
+    const generateContentSpan = rows.find((row) => row.payload?.name === "chat claude-test");
+    const toolSpan = rows.find((row) => row.payload?.name === "execute_tool lookupIncident");
 
+    expect(rows.every((row) => row.type === "ai.sdk.otel.span")).toBe(true);
     expect(invokeAgentSpan).toMatchObject({
       source: "ai-sdk",
       payload: {
-        name: "invoke_agent harness-agent",
-        operation: "invoke_agent",
-        operationId: "ai.streamText",
+        name: "invoke_agent claude-test",
+        attributes: {
+          "gen_ai.operation.name": "invoke_agent",
+          "gen_ai.provider.name": "anthropic",
+          "gen_ai.request.model": "claude-test",
+        },
+      },
+    });
+    expect(agentStepSpan).toMatchObject({
+      source: "ai-sdk",
+      payload: {
+        name: "step 1",
+        attributes: {
+          "gen_ai.operation.name": "agent_step",
+        },
       },
     });
     expect(generateContentSpan).toMatchObject({
       source: "ai-sdk",
       payload: {
-        operation: "generate_content",
-        operationId: "ai.streamText.doStream",
-        provider: "anthropic",
-        model: "claude-test",
+        name: "chat claude-test",
+        attributes: {
+          "gen_ai.operation.name": "chat",
+          "gen_ai.response.id": "resp_123",
+          "gen_ai.usage.input_tokens": 12,
+          "gen_ai.usage.output_tokens": 6,
+        },
       },
     });
     expect(toolSpan).toMatchObject({
       source: "ai-sdk",
       payload: {
         name: "execute_tool lookupIncident",
-        operation: "execute_tool",
-        toolName: "lookupIncident",
-        toolCallId: "tool_123",
+        attributes: {
+          "gen_ai.operation.name": "execute_tool",
+          "gen_ai.tool.name": "lookupIncident",
+          "gen_ai.tool.call.id": "tool_123",
+        },
       },
     });
+    expect(agentStepSpan?.trace_id).toBe(invokeAgentSpan?.trace_id);
+    expect(agentStepSpan?.parent_span_id).toBe(invokeAgentSpan?.span_id);
     expect(generateContentSpan?.trace_id).toBe(invokeAgentSpan?.trace_id);
-    expect(generateContentSpan?.parent_span_id).toBe(invokeAgentSpan?.span_id);
+    expect(generateContentSpan?.parent_span_id).toBe(agentStepSpan?.span_id);
     expect(toolSpan?.trace_id).toBe(invokeAgentSpan?.trace_id);
-    expect(toolSpan?.parent_span_id).toBe(invokeAgentSpan?.span_id);
+    expect(toolSpan?.parent_span_id).toBe(agentStepSpan?.span_id);
   });
 
   it("captures Daytona spans through OpenTelemetry in-process", async () => {
