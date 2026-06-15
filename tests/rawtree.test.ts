@@ -275,6 +275,55 @@ describe("RawTree", () => {
     expect(rows[0]?.duration_ms).toEqual(expect.any(Number));
   });
 
+  it("keeps registerOTel tracing alive when a monitoring integration closes", async () => {
+    const traceFetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const monitorFetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const otel = registerOTel({
+      serviceName: "api",
+      spanProcessor: "simple",
+      apiKey: "rw_test",
+      fetch: traceFetchMock,
+    });
+
+    try {
+      const monitor = initRawTree({
+        apiKey: "rw_test",
+        fetch: monitorFetchMock,
+        integrations: [
+          aiSdkIntegration({ registerOpenTelemetry: false }),
+        ],
+        batch: { intervalMs: 60_000 },
+      });
+
+      await monitor.close();
+
+      const span = trace
+        .getTracer("rawtree-register-otel-lifecycle-test")
+        .startSpan("after monitoring close");
+      span.end();
+
+      await otel.shutdown();
+    } finally {
+      await otel.shutdown().catch(() => undefined);
+    }
+
+    const rows = traceFetchMock.mock.calls.flatMap((call) => JSON.parse(call[1]?.body as string));
+    expect(monitorFetchMock).not.toHaveBeenCalled();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      type: "otel.span",
+      source: "otel",
+      payload: {
+        name: "after monitoring close",
+        resource: {
+          attributes: {
+            "service.name": "api",
+          },
+        },
+      },
+    });
+  });
+
   it("captures AI SDK generate spans through OpenTelemetry in-process", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
     const rawtree = initRawTree({

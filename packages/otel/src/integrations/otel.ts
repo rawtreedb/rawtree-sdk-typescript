@@ -47,6 +47,7 @@ export interface RawTreeOtelSpanSummaryOptions {
 }
 
 let provider: NodeTracerProvider | undefined;
+let providerCreatedByProcessorHost = false;
 let shouldUnregisterProvider = true;
 
 export function registerRawTreeSpanProcessor(
@@ -85,7 +86,13 @@ export function registerRawTreeSpanProcessor(
       processorHost.delete(processor);
       await processor.shutdown();
 
-      if (processorHost.size === 0 && provider && isActiveProvider(provider) && shouldUnregisterProvider) {
+      if (
+        processorHost.size === 0
+        && providerCreatedByProcessorHost
+        && provider
+        && isActiveProvider(provider)
+        && shouldUnregisterProvider
+      ) {
         await shutdownRawTreeTracerProvider();
       }
     },
@@ -118,6 +125,7 @@ export async function shutdownRawTreeTracerProvider(): Promise<void> {
 
   const providerToShutdown = provider;
   provider = undefined;
+  providerCreatedByProcessorHost = false;
   shouldUnregisterProvider = true;
 
   if (isActiveProvider(providerToShutdown)) {
@@ -253,6 +261,7 @@ function ensureRawTreeTracerProvider(
 
   nextProvider.register();
   provider = isActiveProvider(nextProvider) ? nextProvider : undefined;
+  providerCreatedByProcessorHost = provider !== undefined && spanProcessors.length === 0;
 
   return {
     providerRegistered: provider !== undefined,
