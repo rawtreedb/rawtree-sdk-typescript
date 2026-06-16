@@ -9,12 +9,12 @@ import {
   type RawTreeIntegration,
   type RawTreeIntegrationRegistry,
   type RawTreeMonitoringClient,
-} from "../monitoring.js";
+} from "../client.js";
 import {
   getOtelSpanCaptureOptions,
   registerRawTreeSpanProcessor,
   summarizeOtelSpan,
-} from "./otel.js";
+} from "../traces.js";
 
 export interface RawTreeAISDKIntegrationOptions {
   eventName?: string;
@@ -35,7 +35,7 @@ export interface RawTreeAISDKIntegrationClient {
   eventName: string;
 }
 
-declare module "../monitoring.js" {
+declare module "../client.js" {
   interface RawTreeIntegrationRegistry {
     aiSdk: RawTreeAISDKIntegrationClient;
   }

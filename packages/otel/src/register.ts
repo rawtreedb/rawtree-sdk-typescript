@@ -8,12 +8,12 @@ import type { Attributes } from "@opentelemetry/api";
 import {
   type RawTreeIntegration,
   type RawTreeIntegrationTeardown,
-} from "./monitoring.js";
+} from "./client.js";
 import { RawTreeTraceExporter, type RawTreeTraceExporterOptions } from "./exporter.js";
 import {
   registerRawTreeTracerProvider,
   shutdownRawTreeTracerProvider,
-} from "./integrations/otel.js";
+} from "./traces.js";
 
 export interface RawTreeRegisterOtelBaseOptions {
   serviceName?: string;

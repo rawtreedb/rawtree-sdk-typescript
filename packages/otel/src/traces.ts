@@ -13,7 +13,7 @@ import type {
 import type {
   CaptureOptions,
   RawTreeEventStatus,
-} from "../monitoring.js";
+} from "./client.js";
 
 export interface RawTreeOtelRegistrationOptions {
   forceRegisterProvider?: boolean;

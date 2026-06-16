@@ -6,12 +6,12 @@ import type {
 import {
   RawTreeMonitoringClient,
   type RawTreeMonitoringOptions,
-} from "./monitoring.js";
+} from "./client.js";
 import {
   getOtelSpanCaptureOptions,
   summarizeOtelSpan,
   type RawTreeOtelSpanSummaryOptions,
-} from "./integrations/otel.js";
+} from "./traces.js";
 
 export interface RawTreeTraceExporterOptions
   extends Omit<RawTreeMonitoringOptions, "integrations">,
