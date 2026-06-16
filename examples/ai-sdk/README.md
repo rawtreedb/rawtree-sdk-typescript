@@ -9,9 +9,10 @@ exporter, so every OpenTelemetry span in the process can be sent to RawTree.
 - `claudeCode` from `@ai-sdk/harness-claude-code`
 - `createVercelSandbox` from `@ai-sdk/sandbox-vercel`
 
-It sends this event type to RawTree:
+It sends this signal to RawTree:
 
-- `otel.span` rows in the `traces` table
+- OTLP trace spans through `transform=otlp-traces`, stored as one row per span
+  in the `traces` table
 
 The harness packages are canary/experimental, so expect churn.
 

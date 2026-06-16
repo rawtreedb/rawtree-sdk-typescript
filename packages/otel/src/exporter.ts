@@ -1,52 +1,33 @@
 import { ExportResultCode } from "@opentelemetry/core";
+import { JsonTraceSerializer } from "@opentelemetry/otlp-transformer";
 import type {
   ReadableSpan,
   SpanExporter,
 } from "@opentelemetry/sdk-trace-base";
 import {
-  RawTreeMonitoringClient,
-  type RawTreeMonitoringOptions,
-} from "./client.js";
-import {
-  getOtelSpanCaptureOptions,
-  summarizeOtelSpan,
-  type RawTreeOtelSpanSummaryOptions,
-} from "./traces.js";
+  RawTree,
+  type JsonObject,
+  type RawTreeOptions,
+} from "@rawtree/sdk";
 
-export interface RawTreeTraceExporterOptions
-  extends Omit<RawTreeMonitoringOptions, "integrations">,
-    RawTreeOtelSpanSummaryOptions {
-  eventName?: string;
-  source?: string;
+export interface RawTreeTraceExporterOptions extends RawTreeOptions {
+  table?: string;
+  environment?: string;
+  release?: string;
 }
 
-const DEFAULT_EVENT_NAME = "otel.span";
-const DEFAULT_SOURCE = "otel";
 const DEFAULT_TRACES_TABLE = "traces";
+const OTLP_TRACES_TRANSFORM = "otlp-traces";
 
 export class RawTreeTraceExporter implements SpanExporter {
-  private readonly client: RawTreeMonitoringClient;
-  private readonly eventName: string;
-  private readonly source: string;
-  private readonly summaryOptions: RawTreeOtelSpanSummaryOptions;
+  private readonly rawtree: RawTree;
+  private readonly table: string;
   private exportChain: Promise<void> = Promise.resolve();
   private isShutdown = false;
 
   constructor(options: RawTreeTraceExporterOptions) {
-    this.client = new RawTreeMonitoringClient({
-      ...options,
-      table: options.table ?? DEFAULT_TRACES_TABLE,
-      integrations: [],
-    });
-    this.eventName = options.eventName ?? DEFAULT_EVENT_NAME;
-    this.source = options.source ?? DEFAULT_SOURCE;
-    this.summaryOptions = {
-      captureResource: options.captureResource,
-      captureScope: options.captureScope,
-      captureEvents: options.captureEvents,
-      captureLinks: options.captureLinks,
-      attributes: options.attributes,
-    };
+    this.rawtree = new RawTree(options);
+    this.table = options.table ?? DEFAULT_TRACES_TABLE;
   }
 
   export(
@@ -82,7 +63,6 @@ export class RawTreeTraceExporter implements SpanExporter {
 
   async forceFlush(): Promise<void> {
     await this.exportChain;
-    await this.client.flush();
   }
 
   async shutdown(): Promise<void> {
@@ -92,19 +72,27 @@ export class RawTreeTraceExporter implements SpanExporter {
 
     this.isShutdown = true;
     await this.forceFlush();
-    await this.client.close();
   }
 
   private async exportSpans(spans: ReadableSpan[]): Promise<void> {
-    for (const span of spans) {
-      this.client.capture(this.eventName, summarizeOtelSpan(span, this.summaryOptions), {
-        source: this.source,
-        ...getOtelSpanCaptureOptions(span),
-      });
+    if (spans.length === 0) {
+      return;
     }
 
-    await this.client.flush();
+    await this.rawtree.insert(this.table, toOtlpTraceExport(spans), {
+      transform: OTLP_TRACES_TRANSFORM,
+    });
   }
+}
+
+function toOtlpTraceExport(spans: ReadableSpan[]): JsonObject {
+  const serializedRequest = JsonTraceSerializer.serializeRequest(spans);
+
+  if (!serializedRequest) {
+    return { resourceSpans: [] };
+  }
+
+  return JSON.parse(new TextDecoder().decode(serializedRequest)) as JsonObject;
 }
 
 function toError(error: unknown): Error {
