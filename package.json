@@ -1,24 +1,16 @@
 {
-  "name": "@rawtree/sdk",
-  "version": "0.1.0",
-  "description": "TypeScript SDK for building apps with RawTree.",
+  "name": "rawtree-sdk-typescript",
+  "private": true,
+  "description": "TypeScript packages for building apps with RawTree.",
   "type": "module",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
-  },
-  "files": [
-    "dist"
+  "workspaces": [
+    "packages/sdk",
+    "packages/otel"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "npm --workspace @rawtree/sdk run build && npm --workspace @rawtree/otel run build",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "npm --workspace @rawtree/sdk run typecheck && npm --workspace @rawtree/otel run typecheck"
   },
   "keywords": [
     "rawtree",
@@ -27,7 +19,14 @@
   ],
   "license": "MIT",
   "devDependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/sdk-trace-base": "^2.8.0",
+    "@opentelemetry/sdk-trace-node": "^2.8.0",
+    "@types/json-schema": "^7.0.15",
+    "@types/node": "^25.9.3",
+    "ai": "^6.0.204",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.6",
+    "zod": "^4.4.3"
   }
 }

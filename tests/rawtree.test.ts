@@ -1,5 +1,14 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
-import { RawTree, RawTreeError, type QueryResponse } from "../src/index.js";
+import { generateText } from "ai";
+import { SpanStatusCode, trace } from "@opentelemetry/api";
+import { RawTree, RawTreeError, type QueryResponse } from "../packages/sdk/src/index.js";
+import {
+  aiSdkIntegration,
+  initRawTree,
+  RawTreeTraceExporter,
+  registerOTel,
+  shutdownRawTreeTracerProvider,
+} from "../packages/otel/src/index.js";
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body), {
@@ -167,5 +176,487 @@ describe("RawTree", () => {
   it("keeps query rows generic", () => {
     type EventRow = { event: string };
     expectTypeOf<QueryResponse<EventRow>["data"]>().toEqualTypeOf<EventRow[]>();
+  });
+
+  it("captures monitoring events and flushes them to a table", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const rawtree = initRawTree({
+      apiKey: "rw_test",
+      fetch: fetchMock,
+      table: "monitoring_events",
+      service: "api",
+      environment: "test",
+      batch: { intervalMs: 60_000 },
+    });
+
+    rawtree.setTag("region", "local");
+    rawtree.capture("checkout.started", { userId: "u_123" });
+    await rawtree.flush();
+
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://api.rawtree.com/v1/tables/monitoring_events",
+    );
+    expect(body[0]).toMatchObject({
+      type: "checkout.started",
+      source: "manual",
+      service: "api",
+      environment: "test",
+      tags: { region: "local" },
+      payload: { userId: "u_123" },
+    });
+  });
+
+  it("allows beforeSend to drop monitoring events", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const rawtree = initRawTree({
+      apiKey: "rw_test",
+      fetch: fetchMock,
+      beforeSend: () => null,
+      batch: { intervalMs: 60_000 },
+    });
+
+    rawtree.capture("debug.noise", { value: true });
+    await rawtree.flush();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("registers OpenTelemetry with a RawTree exporter", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const otel = registerOTel({
+      serviceName: "api",
+      spanProcessor: "simple",
+      apiKey: "rw_test",
+      fetch: fetchMock,
+    });
+
+    try {
+      const tracer = trace.getTracer("rawtree-register-otel-test");
+      const span = tracer.startSpan("GET /api/chat", {
+        attributes: {
+          "http.route": "/api/chat",
+          "app.tenant": "team_123",
+        },
+      });
+      span.setStatus({ code: SpanStatusCode.OK });
+      span.end();
+
+      await otel.shutdown();
+    } finally {
+      await otel.shutdown().catch(() => undefined);
+    }
+
+    const rows = fetchMock.mock.calls.flatMap((call) => JSON.parse(call[1]?.body as string));
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.rawtree.com/v1/tables/traces");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      type: "otel.span",
+      source: "otel",
+      status: "ok",
+      payload: {
+        name: "GET /api/chat",
+        kind: "internal",
+        attributes: {
+          "http.route": "/api/chat",
+          "app.tenant": "team_123",
+        },
+        scope: {
+          name: "rawtree-register-otel-test",
+        },
+        resource: {
+          attributes: {
+            "service.name": "api",
+          },
+        },
+      },
+    });
+    expect(rows[0]?.service).toBeUndefined();
+    expect(rows[0]?.trace_id).toEqual(expect.any(String));
+    expect(rows[0]?.span_id).toEqual(expect.any(String));
+    expect(rows[0]?.duration_ms).toEqual(expect.any(Number));
+  });
+
+  it("flushes pending spans when provider unregister is disabled", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const otel = registerOTel({
+      serviceName: "api",
+      unregisterOnShutdown: false,
+      apiKey: "rw_test",
+      fetch: fetchMock,
+      batchSpanProcessorOptions: {
+        scheduledDelayMillis: 60_000,
+      },
+    });
+
+    try {
+      const span = trace
+        .getTracer("rawtree-register-otel-flush-test")
+        .startSpan("buffered span");
+      span.end();
+
+      await otel.shutdown();
+    } finally {
+      await shutdownRawTreeTracerProvider();
+    }
+
+    const rows = fetchMock.mock.calls.flatMap((call) => JSON.parse(call[1]?.body as string));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      type: "otel.span",
+      source: "otel",
+      payload: {
+        name: "buffered span",
+      },
+    });
+  });
+
+  it("rejects async OpenTelemetry integration setup", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const asyncIntegration = {
+      name: "async-integration",
+      setupOtel: () => Promise.reject(new Error("setup failed")),
+    };
+
+    try {
+      expect(() => registerOTel({
+        serviceName: "api",
+        spanProcessor: "simple",
+        apiKey: "rw_test",
+        fetch: fetchMock,
+        integrations: [
+          asyncIntegration as never,
+        ],
+      })).toThrow("OpenTelemetry integrations must set up synchronously");
+    } finally {
+      await shutdownRawTreeTracerProvider();
+    }
+  });
+
+  it("does not close a shared exporter after a duplicate registration fails", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const exporter = new RawTreeTraceExporter({
+      apiKey: "rw_test",
+      fetch: fetchMock,
+    });
+    const otel = registerOTel({
+      serviceName: "api",
+      exporter,
+      spanProcessor: "simple",
+    });
+
+    try {
+      expect(() => registerOTel({
+        serviceName: "api",
+        exporter,
+        spanProcessor: "simple",
+      })).toThrow("already registered");
+
+      const span = trace
+        .getTracer("rawtree-register-otel-shared-exporter-test")
+        .startSpan("after failed duplicate registration");
+      span.end();
+
+      await otel.shutdown();
+    } finally {
+      await otel.shutdown().catch(() => undefined);
+    }
+
+    const rows = fetchMock.mock.calls.flatMap((call) => JSON.parse(call[1]?.body as string));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      type: "otel.span",
+      source: "otel",
+      payload: {
+        name: "after failed duplicate registration",
+      },
+    });
+  });
+
+  it("shuts down the provider when an integration teardown fails", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const otel = registerOTel({
+      serviceName: "api",
+      spanProcessor: "simple",
+      apiKey: "rw_test",
+      fetch: fetchMock,
+      integrations: [
+        {
+          name: "bad-teardown",
+          setupOtel: () => () => {
+            throw new Error("teardown failed");
+          },
+        },
+      ],
+    });
+
+    await expect(otel.shutdown()).rejects.toThrow("teardown failed");
+
+    const next = registerOTel({
+      serviceName: "api",
+      spanProcessor: "simple",
+      apiKey: "rw_test",
+      fetch: fetchMock,
+    });
+    await next.shutdown();
+  });
+
+  it("keeps registerOTel tracing alive when a monitoring integration closes", async () => {
+    const traceFetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const monitorFetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const otel = registerOTel({
+      serviceName: "api",
+      spanProcessor: "simple",
+      apiKey: "rw_test",
+      fetch: traceFetchMock,
+    });
+
+    try {
+      const monitor = initRawTree({
+        apiKey: "rw_test",
+        fetch: monitorFetchMock,
+        integrations: [
+          aiSdkIntegration({ registerOpenTelemetry: false }),
+        ],
+        batch: { intervalMs: 60_000 },
+      });
+
+      await monitor.close();
+
+      const span = trace
+        .getTracer("rawtree-register-otel-lifecycle-test")
+        .startSpan("after monitoring close");
+      span.end();
+
+      await otel.shutdown();
+    } finally {
+      await otel.shutdown().catch(() => undefined);
+    }
+
+    const rows = traceFetchMock.mock.calls.flatMap((call) => JSON.parse(call[1]?.body as string));
+    expect(monitorFetchMock).not.toHaveBeenCalled();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      type: "otel.span",
+      source: "otel",
+      payload: {
+        name: "after monitoring close",
+        resource: {
+          attributes: {
+            "service.name": "api",
+          },
+        },
+      },
+    });
+  });
+
+  it("captures AI SDK generate spans through OpenTelemetry in-process", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const rawtree = initRawTree({
+      apiKey: "rw_test",
+      fetch: fetchMock,
+      table: "ai_events",
+      integrations: [
+        aiSdkIntegration(),
+      ],
+      batch: { intervalMs: 60_000 },
+    });
+    expect(rawtree.integrations.aiSdk).toMatchObject({
+      isEnabled: true,
+      providerRegistered: true,
+      eventName: "ai.sdk.otel.span",
+    });
+
+    const usage = {
+      inputTokens: { total: 4, noCache: 4, cacheRead: 0, cacheWrite: 0 },
+      outputTokens: { total: 2, text: 2, reasoning: 0 },
+    };
+    const model = {
+      specificationVersion: "v3",
+      provider: "openai",
+      modelId: "gpt-test",
+      supportedUrls: {},
+      doGenerate: async () => ({
+        content: [{ type: "text", text: "hello" }],
+        finishReason: { unified: "stop", raw: "stop" },
+        usage,
+        warnings: [],
+      }),
+      doStream: async () => {
+        throw new Error("not used");
+      },
+    } as const;
+
+    await generateText({
+      model,
+      prompt: "Say hello",
+      experimental_telemetry: {
+        isEnabled: true,
+        recordInputs: true,
+        recordOutputs: true,
+        functionId: "support-summary",
+      },
+    });
+    await rawtree.flush();
+    await rawtree.close();
+
+    const rows = fetchMock.mock.calls.flatMap((call) => JSON.parse(call[1]?.body as string));
+    const invokeAgentSpan = rows.find((row) => row.payload?.name === "ai.generateText");
+    const generateContentSpan = rows.find((row) => row.payload?.name === "ai.generateText.doGenerate");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.rawtree.com/v1/tables/ai_events");
+    expect(rows.every((row) => row.type === "ai.sdk.otel.span")).toBe(true);
+    expect(invokeAgentSpan).toMatchObject({
+      type: "ai.sdk.otel.span",
+      source: "ai-sdk",
+      status: "ok",
+      payload: {
+        name: "ai.generateText",
+        attributes: {
+          "ai.prompt": JSON.stringify({
+            prompt: "Say hello",
+          }),
+        },
+      },
+    });
+    expect(generateContentSpan).toMatchObject({
+      type: "ai.sdk.otel.span",
+      source: "ai-sdk",
+      status: "ok",
+      payload: {
+        name: "ai.generateText.doGenerate",
+        attributes: {
+          "ai.response.text": "hello",
+          "ai.usage.inputTokens": 4,
+          "ai.usage.outputTokens": 2,
+        },
+      },
+    });
+    expect(invokeAgentSpan?.trace_id).toEqual(expect.any(String));
+    expect(generateContentSpan?.trace_id).toBe(invokeAgentSpan?.trace_id);
+    expect(generateContentSpan?.parent_span_id).toBe(invokeAgentSpan?.span_id);
+  });
+
+  it("captures AI SDK GenAI semantic convention spans through OpenTelemetry", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const rawtree = initRawTree({
+      apiKey: "rw_test",
+      fetch: fetchMock,
+      table: "ai_events",
+      integrations: [
+        aiSdkIntegration(),
+      ],
+      batch: { intervalMs: 60_000 },
+    });
+
+    expect(rawtree.integrations.aiSdk.eventName).toBe("ai.sdk.otel.span");
+
+    const tracer = trace.getTracer("rawtree-ai-sdk-gen-ai-test");
+    tracer.startActiveSpan("invoke_agent claude-test", {
+      attributes: {
+        "gen_ai.operation.name": "invoke_agent",
+        "gen_ai.provider.name": "anthropic",
+        "gen_ai.request.model": "claude-test",
+        "gen_ai.agent.name": "harness-agent",
+        "gen_ai.input.messages": JSON.stringify([
+          { role: "user", parts: [{ type: "text", content: "Investigate the incident." }] },
+        ]),
+      },
+    }, (rootSpan) => {
+      tracer.startActiveSpan("step 1", {
+        attributes: {
+          "gen_ai.operation.name": "agent_step",
+        },
+      }, (stepSpan) => {
+        tracer.startActiveSpan("chat claude-test", {
+          attributes: {
+            "gen_ai.operation.name": "chat",
+            "gen_ai.provider.name": "anthropic",
+            "gen_ai.request.model": "claude-test",
+            "gen_ai.response.id": "resp_123",
+            "gen_ai.usage.input_tokens": 12,
+            "gen_ai.usage.output_tokens": 6,
+            "gen_ai.output.messages": JSON.stringify([
+              { role: "assistant", parts: [{ type: "text", content: "Investigated." }] },
+            ]),
+          },
+        }, (chatSpan) => {
+          chatSpan.end();
+        });
+        tracer.startActiveSpan("execute_tool lookupIncident", {
+          attributes: {
+            "gen_ai.operation.name": "execute_tool",
+            "gen_ai.tool.name": "lookupIncident",
+            "gen_ai.tool.call.id": "tool_123",
+            "gen_ai.tool.type": "function",
+            "gen_ai.tool.call.arguments": JSON.stringify({ incidentId: "inc_123" }),
+            "gen_ai.tool.call.result": JSON.stringify({ severity: "warning" }),
+          },
+        }, (toolSpan) => {
+          toolSpan.end();
+        });
+        stepSpan.end();
+      });
+      rootSpan.end();
+    });
+
+    await rawtree.flush();
+    await rawtree.close();
+
+    const rows = fetchMock.mock.calls.flatMap((call) => JSON.parse(call[1]?.body as string));
+    const invokeAgentSpan = rows.find((row) => row.payload?.name === "invoke_agent claude-test");
+    const agentStepSpan = rows.find((row) => row.payload?.name === "step 1");
+    const generateContentSpan = rows.find((row) => row.payload?.name === "chat claude-test");
+    const toolSpan = rows.find((row) => row.payload?.name === "execute_tool lookupIncident");
+
+    expect(rows.every((row) => row.type === "ai.sdk.otel.span")).toBe(true);
+    expect(invokeAgentSpan).toMatchObject({
+      source: "ai-sdk",
+      payload: {
+        name: "invoke_agent claude-test",
+        attributes: {
+          "gen_ai.operation.name": "invoke_agent",
+          "gen_ai.provider.name": "anthropic",
+          "gen_ai.request.model": "claude-test",
+        },
+      },
+    });
+    expect(agentStepSpan).toMatchObject({
+      source: "ai-sdk",
+      payload: {
+        name: "step 1",
+        attributes: {
+          "gen_ai.operation.name": "agent_step",
+        },
+      },
+    });
+    expect(generateContentSpan).toMatchObject({
+      source: "ai-sdk",
+      payload: {
+        name: "chat claude-test",
+        attributes: {
+          "gen_ai.operation.name": "chat",
+          "gen_ai.response.id": "resp_123",
+          "gen_ai.usage.input_tokens": 12,
+          "gen_ai.usage.output_tokens": 6,
+        },
+      },
+    });
+    expect(toolSpan).toMatchObject({
+      source: "ai-sdk",
+      payload: {
+        name: "execute_tool lookupIncident",
+        attributes: {
+          "gen_ai.operation.name": "execute_tool",
+          "gen_ai.tool.name": "lookupIncident",
+          "gen_ai.tool.call.id": "tool_123",
+        },
+      },
+    });
+    expect(agentStepSpan?.trace_id).toBe(invokeAgentSpan?.trace_id);
+    expect(agentStepSpan?.parent_span_id).toBe(invokeAgentSpan?.span_id);
+    expect(generateContentSpan?.trace_id).toBe(invokeAgentSpan?.trace_id);
+    expect(generateContentSpan?.parent_span_id).toBe(agentStepSpan?.span_id);
+    expect(toolSpan?.trace_id).toBe(invokeAgentSpan?.trace_id);
+    expect(toolSpan?.parent_span_id).toBe(agentStepSpan?.span_id);
   });
 });
