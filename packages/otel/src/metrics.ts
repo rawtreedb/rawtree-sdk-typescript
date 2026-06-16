@@ -2,7 +2,10 @@ import {
   metrics,
   type Attributes,
 } from "@opentelemetry/api";
-import { resourceFromAttributes } from "@opentelemetry/resources";
+import {
+  type Resource,
+  resourceFromAttributes,
+} from "@opentelemetry/resources";
 import {
   MeterProvider,
   type MetricReader,
@@ -12,6 +15,7 @@ export interface RawTreeMeterProviderRegistrationOptions {
   forceRegisterProvider?: boolean;
   unregisterOnClose?: boolean;
   metricReaders?: MetricReader[];
+  resource?: Resource;
   resourceAttributes?: Attributes;
 }
 
@@ -86,9 +90,9 @@ function ensureRawTreeMeterProvider(
   }
 
   const nextProvider = new MeterProvider({
-    resource: options.resourceAttributes
+    resource: options.resource ?? (options.resourceAttributes
       ? resourceFromAttributes(options.resourceAttributes)
-      : undefined,
+      : undefined),
     readers: metricReaders,
   });
   const registered = metrics.setGlobalMeterProvider(nextProvider);

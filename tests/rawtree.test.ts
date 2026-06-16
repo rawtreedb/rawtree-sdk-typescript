@@ -362,12 +362,20 @@ describe("RawTree", () => {
       ],
     });
     expect(otlpResource).toMatchObject({
-      attributes: [
+      attributes: expect.arrayContaining([
         {
           key: "service.name",
           value: { stringValue: "api" },
         },
-      ],
+        {
+          key: "host.arch",
+          value: { stringValue: expect.any(String) },
+        },
+        {
+          key: "process.runtime.name",
+          value: { stringValue: "nodejs" },
+        },
+      ]),
     });
     expect(exportBody.resourceSpans[0].scopeSpans[0].scope.name)
       .toBe("rawtree-register-otel-test");
@@ -530,12 +538,20 @@ describe("RawTree", () => {
         ]),
       });
       expect(firstOtlpResourceFor(fetchMock, tracesUrl)).toMatchObject({
-        attributes: [
+        attributes: expect.arrayContaining([
           {
             key: "service.name",
             value: { stringValue: "api" },
           },
-        ],
+          {
+            key: "host.arch",
+            value: { stringValue: expect.any(String) },
+          },
+          {
+            key: "process.runtime.name",
+            value: { stringValue: "nodejs" },
+          },
+        ]),
       });
       expect(firstOtlpMetricFor(fetchMock, metricsUrl)).toMatchObject({
         name: "daytona_create_duration",
@@ -565,12 +581,20 @@ describe("RawTree", () => {
       expect(firstOtlpMetricScopeFor(fetchMock, metricsUrl).name)
         .toBe("rawtree-daytona-integration-test");
       expect(firstOtlpMetricResourceFor(fetchMock, metricsUrl)).toMatchObject({
-        attributes: [
+        attributes: expect.arrayContaining([
           {
             key: "service.name",
             value: { stringValue: "api" },
           },
-        ],
+          {
+            key: "host.arch",
+            value: { stringValue: expect.any(String) },
+          },
+          {
+            key: "process.runtime.name",
+            value: { stringValue: "nodejs" },
+          },
+        ]),
       });
     } finally {
       await otel?.shutdown().catch(() => undefined);
@@ -714,14 +738,22 @@ describe("RawTree", () => {
       name: "after monitoring close",
     });
     expect(firstOtlpResource(traceFetchMock)).toMatchObject({
-      attributes: [
+      attributes: expect.arrayContaining([
         {
           key: "service.name",
           value: {
             stringValue: "api",
           },
         },
-      ],
+        {
+          key: "host.arch",
+          value: { stringValue: expect.any(String) },
+        },
+        {
+          key: "process.runtime.name",
+          value: { stringValue: "nodejs" },
+        },
+      ]),
     });
   });
 

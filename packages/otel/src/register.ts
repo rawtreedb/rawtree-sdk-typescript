@@ -1,4 +1,13 @@
 import {
+  defaultResource,
+  detectResources,
+  envDetector,
+  hostDetector,
+  processDetector,
+  type Resource,
+  resourceFromAttributes,
+} from "@opentelemetry/resources";
+import {
   MetricReader,
   PeriodicExportingMetricReader,
   type PeriodicExportingMetricReaderOptions,
@@ -80,13 +89,14 @@ export function registerOTel(options: RawTreeRegisterOtelOptions): RawTreeOtelHa
   const metricExporterRegistration = toMetricExporter(options);
   const metricReaderRegistration = toMetricReader(options, metricExporterRegistration);
   const metricReader = metricReaderRegistration.metricReader;
+  const resource = getResource(options);
   let providerRegistration: ReturnType<typeof registerRawTreeTracerProvider>;
   let meterProviderRegistration: ReturnType<typeof registerRawTreeMeterProvider> | undefined;
 
   try {
     providerRegistration = registerRawTreeTracerProvider({
       forceRegisterProvider: options.forceRegisterProvider,
-      resourceAttributes: getResourceAttributes(options),
+      resource,
       unregisterOnClose: options.unregisterOnShutdown,
       spanProcessors: [spanProcessor],
     });
@@ -130,7 +140,7 @@ export function registerOTel(options: RawTreeRegisterOtelOptions): RawTreeOtelHa
     try {
       meterProviderRegistration = registerRawTreeMeterProvider({
         forceRegisterProvider: options.forceRegisterProvider,
-        resourceAttributes: getResourceAttributes(options),
+        resource,
         unregisterOnClose: options.unregisterOnShutdown,
         metricReaders: [metricReader],
       });
@@ -219,6 +229,7 @@ export function registerOTel(options: RawTreeRegisterOtelOptions): RawTreeOtelHa
       }
 
       try {
+        await providerRegistration.forceFlush();
         await providerRegistration.shutdown();
       } catch (shutdownError) {
         shutdownErrors.push(shutdownError);
@@ -333,6 +344,22 @@ function getResourceAttributes(options: RawTreeRegisterOtelOptions): Attributes 
   return entries.length > 0
     ? Object.fromEntries(entries) as Attributes
     : undefined;
+}
+
+function getResource(options: RawTreeRegisterOtelOptions): Resource {
+  const detectedResource = detectResources({
+    detectors: [
+      envDetector,
+      processDetector,
+      hostDetector,
+    ],
+  });
+  const resource = defaultResource().merge(detectedResource);
+  const attributes = getResourceAttributes(options);
+
+  return attributes
+    ? resource.merge(resourceFromAttributes(attributes))
+    : resource;
 }
 
 function getIntegrationContext(
