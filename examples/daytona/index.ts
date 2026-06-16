@@ -1,5 +1,5 @@
 import { Daytona } from "@daytona/sdk";
-import { configureDaytonaOtel } from "@rawtree/otel/daytona";
+import { daytonaIntegration, registerOTel } from "@rawtree/otel";
 
 const rawtreeApiKey = process.env.RAWTREE_API_KEY;
 const daytonaApiKey = process.env.DAYTONA_API_KEY;
@@ -12,17 +12,19 @@ if (!daytonaApiKey) {
   throw new Error("Set DAYTONA_API_KEY before running this example.");
 }
 
-const daytonaOtel = configureDaytonaOtel({
+const rawtree = registerOTel({
   apiKey: rawtreeApiKey,
-  tracesTable: process.env.RAWTREE_DAYTONA_TRACES_TABLE,
-  metricsTable: process.env.RAWTREE_DAYTONA_METRICS_TABLE,
+  serviceName: "rawtree-daytona-example",
+  environment: process.env.NODE_ENV ?? "development",
+  integrations: [
+    daytonaIntegration(),
+  ],
 });
 
 const daytona = new Daytona({
   apiKey: daytonaApiKey,
   apiUrl: process.env.DAYTONA_API_URL,
   target: process.env.DAYTONA_TARGET,
-  otelEnabled: true,
 });
 
 let sandbox: Awaited<ReturnType<typeof daytona.create>> | undefined;
@@ -52,6 +54,6 @@ try {
   try {
     await daytona[Symbol.asyncDispose]();
   } finally {
-    daytonaOtel.shutdown();
+    await rawtree.shutdown();
   }
 }
