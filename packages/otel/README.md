@@ -41,6 +41,12 @@ the AI SDK OpenAI provider:
 npm install @ai-sdk/openai
 ```
 
+For Daytona telemetry, install Daytona separately:
+
+```sh
+npm install @daytona/sdk
+```
+
 ## AI SDK
 
 RawTree does not wrap your model or agent. Enable RawTree once when your process
@@ -124,6 +130,70 @@ try {
 
 See `examples/ai-sdk` in this repository for a runnable harness agent example.
 
+## Daytona
+
+Daytona has its own OpenTelemetry exporter. RawTree does not import Daytona or
+wrap the Daytona client. Instead, `daytonaIntegration()` configures the OTLP
+environment variables that Daytona reads when you enable its telemetry.
+
+```ts
+import { Daytona } from "@daytona/sdk";
+import { registerOTel, aiSdkIntegration, daytonaIntegration } from "@rawtree/otel";
+
+const rawtree = registerOTel({
+  apiKey: process.env.RAWTREE_API_KEY!,
+  serviceName: "agent-api",
+  integrations: [
+    aiSdkIntegration(),
+    daytonaIntegration(),
+  ],
+});
+
+const daytona = new Daytona({
+  apiKey: process.env.DAYTONA_API_KEY!,
+  otelEnabled: true,
+});
+```
+
+Call `registerOTel()` before constructing Daytona or a Daytona-backed sandbox.
+When Daytona telemetry is enabled, the Daytona SDK reads:
+
+```text
+OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://api.rawtree.com/otlp/v1/traces
+OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20...
+```
+
+By default, RawTree writes Daytona traces to the `traces` table. Use
+`tracesTable` when you want Daytona spans in a separate table:
+
+```ts
+daytonaIntegration({
+  tracesTable: "daytona_traces",
+});
+```
+
+If your app already owns OpenTelemetry provider setup, configure Daytona's OTLP
+environment directly:
+
+```ts
+import { configureDaytonaOtel } from "@rawtree/otel/daytona";
+
+const daytonaOtel = configureDaytonaOtel({
+  apiKey: process.env.RAWTREE_API_KEY!,
+  tracesTable: "daytona_traces",
+});
+
+try {
+  const daytona = new Daytona({
+    apiKey: process.env.DAYTONA_API_KEY!,
+    otelEnabled: true,
+  });
+} finally {
+  daytonaOtel.shutdown();
+}
+```
+
 ## What RawTree Receives
 
 `registerOTel()` sends OpenTelemetry trace spans to the `traces` table by
@@ -141,6 +211,13 @@ the source scope has a name.
 
 `serviceName` is stored as the standard OpenTelemetry resource attribute
 `service.name`.
+
+Daytona's own exporter sends OTLP HTTP/protobuf directly to RawTree's native
+OpenTelemetry endpoint:
+
+```text
+/otlp/v1/traces
+```
 
 The package currently exports traces. Future logs and metrics support should use
 the default RawTree tables `logs` and `metrics`.
@@ -236,6 +313,35 @@ aiSdkIntegration({
 });
 ```
 
+### daytonaIntegration
+
+```ts
+daytonaIntegration({
+  apiKey?: string;
+  baseUrl?: string;
+  endpoint?: string;
+  tracesTable?: string;
+  headers?: Record<string, string>;
+});
+```
+
+### configureDaytonaOtel
+
+Use this helper when you want to configure Daytona's own exporter without
+calling `registerOTel()`.
+
+```ts
+const daytonaOtel = configureDaytonaOtel({
+  apiKey: string;
+  baseUrl?: string;
+  endpoint?: string;
+  tracesTable?: string;
+  headers?: Record<string, string>;
+});
+
+daytonaOtel.shutdown();
+```
+
 ### RawTreeTraceExporter
 
 Use this when you want to wire RawTree into an existing OpenTelemetry setup
@@ -258,6 +364,10 @@ import { registerOTel, aiSdkIntegration } from "@rawtree/otel";
 
 ```ts
 import { aiSdkIntegration } from "@rawtree/otel/ai-sdk";
+```
+
+```ts
+import { daytonaIntegration, configureDaytonaOtel } from "@rawtree/otel/daytona";
 ```
 
 ```ts

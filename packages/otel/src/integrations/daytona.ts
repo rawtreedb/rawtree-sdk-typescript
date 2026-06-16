@@ -1,0 +1,182 @@
+import type {
+  RawTreeIntegration,
+  RawTreeOtelIntegrationContext,
+} from "../client.js";
+
+export interface RawTreeDaytonaIntegrationOptions {
+  apiKey?: string;
+  baseUrl?: string;
+  endpoint?: string;
+  tracesTable?: string;
+  headers?: Record<string, string>;
+}
+
+export interface RawTreeDaytonaOtelConfiguration {
+  endpoint: string;
+  headers: string;
+  tracesTable?: string;
+  shutdown: () => void;
+}
+
+const DEFAULT_RAWTREE_BASE_URL = "https://api.rawtree.com";
+const OTLP_TRACES_PATH = "/otlp/v1/traces";
+const OTLP_PROTOCOL = "http/protobuf";
+const OTEL_EXPORTER_OTLP_PROTOCOL = "OTEL_EXPORTER_OTLP_PROTOCOL";
+const OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT";
+const OTEL_EXPORTER_OTLP_HEADERS = "OTEL_EXPORTER_OTLP_HEADERS";
+
+const DAYTONA_OTEL_ENV_KEYS = [
+  OTEL_EXPORTER_OTLP_PROTOCOL,
+  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT,
+  OTEL_EXPORTER_OTLP_HEADERS,
+] as const;
+
+export function daytonaIntegration(
+  options: RawTreeDaytonaIntegrationOptions = {},
+): RawTreeIntegration {
+  return {
+    name: "daytona",
+    setupOtel(context) {
+      const configuration = configureDaytonaOtel(options, context);
+
+      return configuration.shutdown;
+    },
+  };
+}
+
+export function configureDaytonaOtel(
+  options: RawTreeDaytonaIntegrationOptions = {},
+  context: RawTreeOtelIntegrationContext = {},
+): RawTreeDaytonaOtelConfiguration {
+  const apiKey = options.apiKey ?? context.apiKey ?? process.env.RAWTREE_API_KEY;
+
+  if (!apiKey) {
+    throw new Error(
+      "RawTree Daytona integration requires an apiKey. "
+        + "Pass apiKey to daytonaIntegration(), use registerOTel({ apiKey, integrations }), "
+        + "or set RAWTREE_API_KEY.",
+    );
+  }
+
+  const previousEnvironment = snapshotEnvironment(DAYTONA_OTEL_ENV_KEYS);
+  const endpoint = getTracesEndpoint(options, context);
+  const headers = getOtlpHeaders({
+    apiKey,
+    tracesTable: options.tracesTable,
+    headers: options.headers,
+  });
+
+  process.env[OTEL_EXPORTER_OTLP_PROTOCOL] = OTLP_PROTOCOL;
+  process.env[OTEL_EXPORTER_OTLP_TRACES_ENDPOINT] = endpoint;
+  process.env[OTEL_EXPORTER_OTLP_HEADERS] = headers;
+
+  return {
+    endpoint,
+    headers,
+    tracesTable: options.tracesTable,
+    shutdown: () => {
+      restoreEnvironment(previousEnvironment);
+    },
+  };
+}
+
+interface OtlpHeaderOptions {
+  apiKey: string;
+  tracesTable?: string;
+  headers?: Record<string, string>;
+}
+
+interface HeaderEntry {
+  key: string;
+  value: string;
+}
+
+function getTracesEndpoint(
+  options: RawTreeDaytonaIntegrationOptions,
+  context: RawTreeOtelIntegrationContext,
+): string {
+  if (options.endpoint) {
+    return trimTrailingSlashes(options.endpoint);
+  }
+
+  return `${getRawTreeOtlpBaseUrl(options.baseUrl ?? context.baseUrl)}${OTLP_TRACES_PATH}`;
+}
+
+function getRawTreeOtlpBaseUrl(baseUrl = DEFAULT_RAWTREE_BASE_URL): string {
+  return trimTrailingSlashes(baseUrl).replace(/\/v1$/, "");
+}
+
+function getOtlpHeaders(options: OtlpHeaderOptions): string {
+  const entries = parseOtlpHeaders(process.env[OTEL_EXPORTER_OTLP_HEADERS]);
+
+  for (const [key, value] of Object.entries(options.headers ?? {})) {
+    setOtlpHeader(entries, key, value);
+  }
+
+  setOtlpHeader(entries, "authorization", `Bearer ${options.apiKey}`);
+
+  if (options.tracesTable) {
+    setOtlpHeader(entries, "x-rawtree-traces-table", options.tracesTable);
+  }
+
+  return entries.map(({ key, value }) => `${key}=${value}`).join(",");
+}
+
+function parseOtlpHeaders(value: string | undefined): HeaderEntry[] {
+  if (!value) {
+    return [];
+  }
+
+  return value
+    .split(",")
+    .map((header) => header.trim())
+    .filter((header) => header.length > 0)
+    .map((header) => {
+      const separatorIndex = header.indexOf("=");
+
+      return separatorIndex === -1
+        ? { key: header, value: "" }
+        : {
+          key: header.slice(0, separatorIndex),
+          value: header.slice(separatorIndex + 1),
+        };
+    });
+}
+
+function setOtlpHeader(entries: HeaderEntry[], key: string, value: string): void {
+  const existingIndex = entries.findIndex(
+    (entry) => entry.key.toLowerCase() === key.toLowerCase(),
+  );
+  const header = {
+    key,
+    value: encodeURIComponent(value),
+  };
+
+  if (existingIndex === -1) {
+    entries.push(header);
+    return;
+  }
+
+  entries[existingIndex] = header;
+}
+
+function trimTrailingSlashes(value: string): string {
+  return value.replace(/\/+$/, "");
+}
+
+function snapshotEnvironment(
+  keys: readonly string[],
+): Map<string, string | undefined> {
+  return new Map(keys.map((key) => [key, process.env[key]]));
+}
+
+function restoreEnvironment(previousEnvironment: Map<string, string | undefined>): void {
+  for (const [key, value] of previousEnvironment) {
+    if (value === undefined) {
+      delete process.env[key];
+      continue;
+    }
+
+    process.env[key] = value;
+  }
+}

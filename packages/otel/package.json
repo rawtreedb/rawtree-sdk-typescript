@@ -15,6 +15,10 @@
       "types": "./dist/integrations/ai-sdk.d.ts",
       "import": "./dist/integrations/ai-sdk.js"
     },
+    "./daytona": {
+      "types": "./dist/integrations/daytona.d.ts",
+      "import": "./dist/integrations/daytona.js"
+    },
     "./exporter": {
       "types": "./dist/exporter.d.ts",
       "import": "./dist/exporter.js"

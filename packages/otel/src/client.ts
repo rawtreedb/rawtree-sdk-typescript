@@ -57,7 +57,11 @@ export interface RawTreeIntegrationRegistry {}
 export type RawTreeIntegrationTeardown = () => void | Promise<void>;
 
 export interface RawTreeOtelIntegrationContext {
+  apiKey?: string;
+  baseUrl?: string;
   serviceName?: string;
+  environment?: string;
+  release?: string;
 }
 
 export interface RawTreeIntegration {

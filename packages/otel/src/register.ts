@@ -10,6 +10,7 @@ import type { Attributes } from "@opentelemetry/api";
 import {
   type RawTreeIntegration,
   type RawTreeIntegrationTeardown,
+  type RawTreeOtelIntegrationContext,
 } from "./client.js";
 import { RawTreeTraceExporter, type RawTreeTraceExporterOptions } from "./exporter.js";
 import {
@@ -85,10 +86,11 @@ export function registerOTel(options: RawTreeRegisterOtelOptions): RawTreeOtelHa
   }
 
   const integrationTeardowns: RawTreeIntegrationTeardown[] = [];
+  const integrationContext = getIntegrationContext(options);
 
   try {
     for (const integration of options.integrations ?? []) {
-      const setupResult = integration.setupOtel?.({ serviceName: options.serviceName });
+      const setupResult = integration.setupOtel?.(integrationContext);
 
       if (isPromiseLike(setupResult)) {
         void Promise.resolve(setupResult).catch(() => undefined);
@@ -197,6 +199,20 @@ function getResourceAttributes(options: RawTreeRegisterOtelOptions): Attributes 
   return entries.length > 0
     ? Object.fromEntries(entries) as Attributes
     : undefined;
+}
+
+function getIntegrationContext(
+  options: RawTreeRegisterOtelOptions,
+): RawTreeOtelIntegrationContext {
+  const rawTreeOptions = hasCustomExporter(options) ? undefined : options;
+
+  return {
+    apiKey: rawTreeOptions?.apiKey,
+    baseUrl: rawTreeOptions?.baseUrl,
+    serviceName: options.serviceName,
+    environment: options.environment,
+    release: options.release,
+  };
 }
 
 function hasCustomExporter(
