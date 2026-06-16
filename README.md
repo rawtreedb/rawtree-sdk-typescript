@@ -48,6 +48,10 @@ integration for you when `aiSdkIntegration()` is enabled.
 npm install @rawtree/otel
 ```
 
+The package-level README at `packages/otel/README.md` has the full setup guide,
+including install commands, shutdown guidance, AI SDK telemetry examples, and
+instructions for apps that already own OpenTelemetry provider setup.
+
 Install the tools you want to monitor as peers. For the AI SDK harness example:
 
 ```sh
