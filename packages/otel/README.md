@@ -132,59 +132,39 @@ See `examples/ai-sdk` in this repository for a runnable harness agent example.
 
 ## Daytona
 
-Daytona has its own OpenTelemetry exporter. RawTree does not import Daytona or
-wrap the Daytona client. Instead, `configureDaytonaOtel()` configures the OTLP
-environment variables that Daytona reads when you enable its telemetry.
+RawTree does not import Daytona or wrap the Daytona client. Register RawTree
+once when your process starts and add `daytonaIntegration()` with your other
+integrations. Daytona SDK spans are exported by the RawTree OpenTelemetry
+provider.
 
 ```ts
 import { Daytona } from "@daytona/sdk";
-import { configureDaytonaOtel } from "@rawtree/otel/daytona";
+import { registerOTel, aiSdkIntegration, daytonaIntegration } from "@rawtree/otel";
 
-const daytonaOtel = configureDaytonaOtel({
+const rawtree = registerOTel({
   apiKey: process.env.RAWTREE_API_KEY!,
+  serviceName: "agent-api",
+  integrations: [
+    aiSdkIntegration(),
+    daytonaIntegration(),
+  ],
 });
 
 const daytona = new Daytona({
   apiKey: process.env.DAYTONA_API_KEY!,
-  otelEnabled: true,
 });
 
 try {
   // Use Daytona here.
 } finally {
   await daytona[Symbol.asyncDispose]();
-  daytonaOtel.shutdown();
+  await rawtree.shutdown();
 }
 ```
 
-Call `configureDaytonaOtel()` before constructing Daytona or a Daytona-backed
-sandbox. When Daytona telemetry is enabled, the Daytona SDK reads:
-
-```text
-OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
-OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://api.rawtree.com/otlp/v1/traces
-OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://api.rawtree.com/otlp/v1/metrics
-OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20...
-```
-
-By default, RawTree writes Daytona traces to the `traces` table and Daytona
-metrics to the `metrics` table. Use `tracesTable` or `metricsTable` when you
-want separate tables:
-
-```ts
-configureDaytonaOtel({
-  tracesTable: "daytona_traces",
-  metricsTable: "daytona_metrics",
-});
-```
-
-When `tracesEndpoint` is set and `metricsEndpoint` is omitted, `tracesEndpoint`
-must end with `/traces`. RawTree derives the metrics endpoint by replacing that
-trailing segment with `/metrics`.
-
-Do not call `registerOTel()` solely for Daytona. Daytona starts its own
-OpenTelemetry SDK when `otelEnabled: true` is set, so the Daytona path should
-use `configureDaytonaOtel()` and RawTree's native OTLP endpoints.
+Do not pass `otelEnabled: true` when using `daytonaIntegration()`.
+`registerOTel()` owns the process OpenTelemetry provider, and the integration
+keeps Daytona from starting a second provider through its environment flags.
 
 See `examples/daytona` in this repository for a runnable Daytona example.
 
@@ -206,16 +186,8 @@ the source scope has a name.
 `serviceName` is stored as the standard OpenTelemetry resource attribute
 `service.name`.
 
-Daytona's own exporter sends OTLP HTTP/protobuf directly to RawTree's native
-OpenTelemetry endpoints:
-
-```text
-/otlp/v1/traces
-/otlp/v1/metrics
-```
-
-The package currently exports traces. Future logs and metrics support should use
-the default RawTree tables `logs` and `metrics`.
+The package currently exports traces. Future logs and metrics support should
+use the default RawTree tables `logs` and `metrics`.
 
 ## Process Setup
 
@@ -310,38 +282,8 @@ aiSdkIntegration({
 
 ### daytonaIntegration
 
-Most Daytona apps should use `configureDaytonaOtel()` because Daytona owns its
-own OpenTelemetry SDK when `otelEnabled: true` is set.
-
 ```ts
-daytonaIntegration({
-  apiKey?: string;
-  baseUrl?: string;
-  tracesEndpoint?: string;
-  metricsEndpoint?: string;
-  tracesTable?: string;
-  metricsTable?: string;
-  headers?: Record<string, string>;
-});
-```
-
-### configureDaytonaOtel
-
-Use this helper when you want to configure Daytona's own exporter without
-calling `registerOTel()`.
-
-```ts
-const daytonaOtel = configureDaytonaOtel({
-  apiKey: string;
-  baseUrl?: string;
-  tracesEndpoint?: string;
-  metricsEndpoint?: string;
-  tracesTable?: string;
-  metricsTable?: string;
-  headers?: Record<string, string>;
-});
-
-daytonaOtel.shutdown();
+daytonaIntegration();
 ```
 
 ### RawTreeTraceExporter
@@ -369,7 +311,7 @@ import { aiSdkIntegration } from "@rawtree/otel/ai-sdk";
 ```
 
 ```ts
-import { daytonaIntegration, configureDaytonaOtel } from "@rawtree/otel/daytona";
+import { daytonaIntegration } from "@rawtree/otel/daytona";
 ```
 
 ```ts
