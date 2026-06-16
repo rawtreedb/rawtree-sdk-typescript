@@ -4,6 +4,8 @@ import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { RawTree, RawTreeError, type QueryResponse } from "../packages/sdk/src/index.js";
 import {
   aiSdkIntegration,
+  configureDaytonaOtel,
+  daytonaIntegration,
   initRawTree,
   RawTreeTraceExporter,
   registerOTel,
@@ -31,6 +33,52 @@ function firstOtlpSpan(fetchMock: ReturnType<typeof vi.fn>) {
 
 function firstOtlpResource(fetchMock: ReturnType<typeof vi.fn>) {
   return firstOtlpExport(fetchMock).resourceSpans[0].resource;
+}
+
+const DAYTONA_OTEL_ENV_KEYS = [
+  "OTEL_EXPORTER_OTLP_PROTOCOL",
+  "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+  "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
+  "OTEL_EXPORTER_OTLP_HEADERS",
+  "RAWTREE_API_KEY",
+] as const;
+
+function snapshotEnv(keys: readonly string[]): Map<string, string | undefined> {
+  return new Map(keys.map((key) => [key, process.env[key]]));
+}
+
+function restoreEnv(snapshot: Map<string, string | undefined>): void {
+  for (const [key, value] of snapshot) {
+    if (value === undefined) {
+      delete process.env[key];
+      continue;
+    }
+
+    process.env[key] = value;
+  }
+}
+
+function clearEnv(keys: readonly string[]): void {
+  for (const key of keys) {
+    delete process.env[key];
+  }
+}
+
+function parseOtlpHeaders(value: string | undefined): Record<string, string> {
+  return Object.fromEntries((value ?? "")
+    .split(",")
+    .map((header) => header.trim())
+    .filter((header) => header.length > 0)
+    .map((header) => {
+      const separatorIndex = header.indexOf("=");
+
+      return separatorIndex === -1
+        ? [header, ""]
+        : [
+          header.slice(0, separatorIndex),
+          decodeURIComponent(header.slice(separatorIndex + 1)),
+        ];
+    }));
 }
 
 describe("RawTree", () => {
@@ -406,6 +454,140 @@ describe("RawTree", () => {
     expect(firstOtlpSpan(fetchMock)).toMatchObject({
       name: "after failed duplicate registration",
     });
+  });
+
+  it("configures Daytona to send traces to RawTree native OTLP", () => {
+    const envSnapshot = snapshotEnv(DAYTONA_OTEL_ENV_KEYS);
+
+    clearEnv(DAYTONA_OTEL_ENV_KEYS);
+    process.env.OTEL_EXPORTER_OTLP_HEADERS = "x-existing=one";
+
+    try {
+      const configuration = configureDaytonaOtel({
+        apiKey: "rw_test",
+        baseUrl: "https://example.com/v1/",
+        tracesTable: "daytona_traces",
+        metricsTable: "daytona_metrics",
+        headers: {
+          "x-extra": "two words",
+        },
+      });
+
+      expect(configuration).toMatchObject({
+        tracesEndpoint: "https://example.com/otlp/v1/traces",
+        metricsEndpoint: "https://example.com/otlp/v1/metrics",
+        tracesTable: "daytona_traces",
+        metricsTable: "daytona_metrics",
+      });
+      expect(process.env.OTEL_EXPORTER_OTLP_PROTOCOL).toBe("http/protobuf");
+      expect(process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT)
+        .toBe("https://example.com/otlp/v1/traces");
+      expect(process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT)
+        .toBe("https://example.com/otlp/v1/metrics");
+      expect(parseOtlpHeaders(process.env.OTEL_EXPORTER_OTLP_HEADERS)).toMatchObject({
+        "x-existing": "one",
+        "x-extra": "two words",
+        authorization: "Bearer rw_test",
+        "x-rawtree-traces-table": "daytona_traces",
+        "x-rawtree-metrics-table": "daytona_metrics",
+      });
+      expect(configuration.headers).toBe(process.env.OTEL_EXPORTER_OTLP_HEADERS);
+
+      configuration.shutdown();
+
+      expect(process.env.OTEL_EXPORTER_OTLP_PROTOCOL).toBeUndefined();
+      expect(process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT).toBeUndefined();
+      expect(process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT).toBeUndefined();
+      expect(process.env.OTEL_EXPORTER_OTLP_HEADERS).toBe("x-existing=one");
+    } finally {
+      restoreEnv(envSnapshot);
+    }
+  });
+
+  it("keeps Daytona custom traces and metrics endpoints on the same OTLP host", () => {
+    const envSnapshot = snapshotEnv(DAYTONA_OTEL_ENV_KEYS);
+
+    clearEnv(DAYTONA_OTEL_ENV_KEYS);
+
+    try {
+      const configuration = configureDaytonaOtel({
+        apiKey: "rw_test",
+        tracesEndpoint: "https://collector.example.com/otlp/v1/traces",
+      });
+
+      expect(configuration).toMatchObject({
+        tracesEndpoint: "https://collector.example.com/otlp/v1/traces",
+        metricsEndpoint: "https://collector.example.com/otlp/v1/metrics",
+      });
+      expect(process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT)
+        .toBe("https://collector.example.com/otlp/v1/traces");
+      expect(process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT)
+        .toBe("https://collector.example.com/otlp/v1/metrics");
+
+      configuration.shutdown();
+    } finally {
+      restoreEnv(envSnapshot);
+    }
+  });
+
+  it("requires a metrics endpoint when a custom Daytona traces endpoint cannot be derived", () => {
+    const envSnapshot = snapshotEnv(DAYTONA_OTEL_ENV_KEYS);
+
+    clearEnv(DAYTONA_OTEL_ENV_KEYS);
+
+    try {
+      expect(() => configureDaytonaOtel({
+        apiKey: "rw_test",
+        tracesEndpoint: "https://collector.example.com/custom-traces",
+      })).toThrow("metricsEndpoint");
+      expect(process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT).toBeUndefined();
+      expect(process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT).toBeUndefined();
+    } finally {
+      restoreEnv(envSnapshot);
+    }
+  });
+
+  it("passes registerOTel connection settings to Daytona integration", async () => {
+    const envSnapshot = snapshotEnv(DAYTONA_OTEL_ENV_KEYS);
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    let otel: ReturnType<typeof registerOTel> | undefined;
+
+    clearEnv(DAYTONA_OTEL_ENV_KEYS);
+
+    try {
+      otel = registerOTel({
+        apiKey: "rw_test",
+        baseUrl: "https://rawtree.internal/v1",
+        serviceName: "api",
+        spanProcessor: "simple",
+        fetch: fetchMock,
+        integrations: [
+          daytonaIntegration({
+            tracesTable: "daytona_traces",
+          }),
+        ],
+      });
+
+      expect(process.env.OTEL_EXPORTER_OTLP_PROTOCOL).toBe("http/protobuf");
+      expect(process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT)
+        .toBe("https://rawtree.internal/otlp/v1/traces");
+      expect(process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT)
+        .toBe("https://rawtree.internal/otlp/v1/metrics");
+      expect(parseOtlpHeaders(process.env.OTEL_EXPORTER_OTLP_HEADERS)).toMatchObject({
+        authorization: "Bearer rw_test",
+        "x-rawtree-traces-table": "daytona_traces",
+      });
+
+      await otel.shutdown();
+
+      expect(process.env.OTEL_EXPORTER_OTLP_PROTOCOL).toBeUndefined();
+      expect(process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT).toBeUndefined();
+      expect(process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT).toBeUndefined();
+      expect(process.env.OTEL_EXPORTER_OTLP_HEADERS).toBeUndefined();
+    } finally {
+      await otel?.shutdown().catch(() => undefined);
+      restoreEnv(envSnapshot);
+    }
   });
 
   it("shuts down the provider when an integration teardown fails", async () => {

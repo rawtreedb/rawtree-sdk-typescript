@@ -1,6 +1,6 @@
 {
   "name": "@rawtree/otel",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "OpenTelemetry monitoring integrations for RawTree.",
   "type": "module",
   "main": "./dist/index.js",
@@ -14,6 +14,10 @@
     "./ai-sdk": {
       "types": "./dist/integrations/ai-sdk.d.ts",
       "import": "./dist/integrations/ai-sdk.js"
+    },
+    "./daytona": {
+      "types": "./dist/integrations/daytona.d.ts",
+      "import": "./dist/integrations/daytona.js"
     },
     "./exporter": {
       "types": "./dist/exporter.d.ts",
