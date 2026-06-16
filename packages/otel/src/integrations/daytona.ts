@@ -6,14 +6,15 @@ import type {
 export interface RawTreeDaytonaIntegrationOptions {
   apiKey?: string;
   baseUrl?: string;
-  endpoint?: string;
+  tracesEndpoint?: string;
+  metricsEndpoint?: string;
   tracesTable?: string;
   metricsTable?: string;
   headers?: Record<string, string>;
 }
 
 export interface RawTreeDaytonaOtelConfiguration {
-  endpoint: string;
+  tracesEndpoint: string;
   metricsEndpoint: string;
   headers: string;
   tracesTable?: string;
@@ -65,7 +66,7 @@ export function configureDaytonaOtel(
   }
 
   const previousEnvironment = snapshotEnvironment(DAYTONA_OTEL_ENV_KEYS);
-  const endpoint = getTracesEndpoint(options, context);
+  const tracesEndpoint = getTracesEndpoint(options, context);
   const metricsEndpoint = getMetricsEndpoint(options, context);
   const headers = getOtlpHeaders({
     apiKey,
@@ -75,12 +76,12 @@ export function configureDaytonaOtel(
   });
 
   process.env[OTEL_EXPORTER_OTLP_PROTOCOL] = OTLP_PROTOCOL;
-  process.env[OTEL_EXPORTER_OTLP_TRACES_ENDPOINT] = endpoint;
+  process.env[OTEL_EXPORTER_OTLP_TRACES_ENDPOINT] = tracesEndpoint;
   process.env[OTEL_EXPORTER_OTLP_METRICS_ENDPOINT] = metricsEndpoint;
   process.env[OTEL_EXPORTER_OTLP_HEADERS] = headers;
 
   return {
-    endpoint,
+    tracesEndpoint,
     metricsEndpoint,
     headers,
     tracesTable: options.tracesTable,
@@ -107,8 +108,8 @@ function getTracesEndpoint(
   options: RawTreeDaytonaIntegrationOptions,
   context: RawTreeOtelIntegrationContext,
 ): string {
-  if (options.endpoint) {
-    return trimTrailingSlashes(options.endpoint);
+  if (options.tracesEndpoint) {
+    return trimTrailingSlashes(options.tracesEndpoint);
   }
 
   return `${getRawTreeOtlpBaseUrl(options.baseUrl ?? context.baseUrl)}${OTLP_TRACES_PATH}`;
@@ -118,6 +119,14 @@ function getMetricsEndpoint(
   options: RawTreeDaytonaIntegrationOptions,
   context: RawTreeOtelIntegrationContext,
 ): string {
+  if (options.metricsEndpoint) {
+    return trimTrailingSlashes(options.metricsEndpoint);
+  }
+
+  if (options.tracesEndpoint) {
+    return getSiblingSignalEndpoint(options.tracesEndpoint, "metrics");
+  }
+
   return `${getRawTreeOtlpBaseUrl(options.baseUrl ?? context.baseUrl)}${OTLP_METRICS_PATH}`;
 }
 
@@ -185,6 +194,16 @@ function setOtlpHeader(entries: HeaderEntry[], key: string, value: string): void
 
 function trimTrailingSlashes(value: string): string {
   return value.replace(/\/+$/, "");
+}
+
+function getSiblingSignalEndpoint(endpoint: string, signal: "metrics"): string {
+  const trimmedEndpoint = trimTrailingSlashes(endpoint);
+
+  if (trimmedEndpoint.endsWith("/traces")) {
+    return `${trimmedEndpoint.slice(0, -"/traces".length)}/${signal}`;
+  }
+
+  return trimmedEndpoint;
 }
 
 function snapshotEnvironment(

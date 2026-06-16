@@ -474,7 +474,7 @@ describe("RawTree", () => {
       });
 
       expect(configuration).toMatchObject({
-        endpoint: "https://example.com/otlp/v1/traces",
+        tracesEndpoint: "https://example.com/otlp/v1/traces",
         metricsEndpoint: "https://example.com/otlp/v1/metrics",
         tracesTable: "daytona_traces",
         metricsTable: "daytona_metrics",
@@ -499,6 +499,32 @@ describe("RawTree", () => {
       expect(process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT).toBeUndefined();
       expect(process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT).toBeUndefined();
       expect(process.env.OTEL_EXPORTER_OTLP_HEADERS).toBe("x-existing=one");
+    } finally {
+      restoreEnv(envSnapshot);
+    }
+  });
+
+  it("keeps Daytona custom traces and metrics endpoints on the same OTLP host", () => {
+    const envSnapshot = snapshotEnv(DAYTONA_OTEL_ENV_KEYS);
+
+    clearEnv(DAYTONA_OTEL_ENV_KEYS);
+
+    try {
+      const configuration = configureDaytonaOtel({
+        apiKey: "rw_test",
+        tracesEndpoint: "https://collector.example.com/otlp/v1/traces",
+      });
+
+      expect(configuration).toMatchObject({
+        tracesEndpoint: "https://collector.example.com/otlp/v1/traces",
+        metricsEndpoint: "https://collector.example.com/otlp/v1/metrics",
+      });
+      expect(process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT)
+        .toBe("https://collector.example.com/otlp/v1/traces");
+      expect(process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT)
+        .toBe("https://collector.example.com/otlp/v1/metrics");
+
+      configuration.shutdown();
     } finally {
       restoreEnv(envSnapshot);
     }
