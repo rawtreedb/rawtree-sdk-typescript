@@ -49,6 +49,9 @@ try {
     });
   }
 
-  await daytona[Symbol.asyncDispose]();
-  daytonaOtel.shutdown();
+  try {
+    await daytona[Symbol.asyncDispose]();
+  } finally {
+    daytonaOtel.shutdown();
+  }
 }
