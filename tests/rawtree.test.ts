@@ -6,6 +6,7 @@ import {
   aiSdkIntegration,
   initRawTree,
   registerOTel,
+  shutdownRawTreeTracerProvider,
 } from "../packages/otel/src/index.js";
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
@@ -273,6 +274,62 @@ describe("RawTree", () => {
     expect(rows[0]?.trace_id).toEqual(expect.any(String));
     expect(rows[0]?.span_id).toEqual(expect.any(String));
     expect(rows[0]?.duration_ms).toEqual(expect.any(Number));
+  });
+
+  it("flushes pending spans when provider unregister is disabled", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const otel = registerOTel({
+      serviceName: "api",
+      unregisterOnShutdown: false,
+      apiKey: "rw_test",
+      fetch: fetchMock,
+      batchSpanProcessorOptions: {
+        scheduledDelayMillis: 60_000,
+      },
+    });
+
+    try {
+      const span = trace
+        .getTracer("rawtree-register-otel-flush-test")
+        .startSpan("buffered span");
+      span.end();
+
+      await otel.shutdown();
+    } finally {
+      await shutdownRawTreeTracerProvider();
+    }
+
+    const rows = fetchMock.mock.calls.flatMap((call) => JSON.parse(call[1]?.body as string));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      type: "otel.span",
+      source: "otel",
+      payload: {
+        name: "buffered span",
+      },
+    });
+  });
+
+  it("rejects async OpenTelemetry integration setup", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const asyncIntegration = {
+      name: "async-integration",
+      setupOtel: () => Promise.reject(new Error("setup failed")),
+    };
+
+    try {
+      expect(() => registerOTel({
+        serviceName: "api",
+        spanProcessor: "simple",
+        apiKey: "rw_test",
+        fetch: fetchMock,
+        integrations: [
+          asyncIntegration as never,
+        ],
+      })).toThrow("OpenTelemetry integrations must set up synchronously");
+    } finally {
+      await shutdownRawTreeTracerProvider();
+    }
   });
 
   it("keeps registerOTel tracing alive when a monitoring integration closes", async () => {

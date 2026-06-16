@@ -10,7 +10,10 @@ import {
   type RawTreeIntegrationTeardown,
 } from "./monitoring.js";
 import { RawTreeTraceExporter, type RawTreeTraceExporterOptions } from "./exporter.js";
-import { registerRawTreeTracerProvider } from "./integrations/otel.js";
+import {
+  registerRawTreeTracerProvider,
+  shutdownRawTreeTracerProvider,
+} from "./integrations/otel.js";
 
 export interface RawTreeRegisterOtelBaseOptions {
   serviceName?: string;
@@ -43,16 +46,26 @@ export interface RawTreeOtelHandle {
 }
 
 export function registerOTel(options: RawTreeRegisterOtelOptions): RawTreeOtelHandle {
-  const exporter = toExporter(options);
-  const spanProcessor = toSpanProcessor(options, exporter);
-  const providerRegistration = registerRawTreeTracerProvider({
-    forceRegisterProvider: options.forceRegisterProvider,
-    resourceAttributes: getResourceAttributes(options),
-    unregisterOnClose: options.unregisterOnShutdown,
-    spanProcessors: [spanProcessor],
-  });
+  const exporterRegistration = toExporter(options);
+  const exporter = exporterRegistration.exporter;
+  const spanProcessorRegistration = toSpanProcessor(options, exporter);
+  const spanProcessor = spanProcessorRegistration.spanProcessor;
+  let providerRegistration: ReturnType<typeof registerRawTreeTracerProvider>;
+
+  try {
+    providerRegistration = registerRawTreeTracerProvider({
+      forceRegisterProvider: options.forceRegisterProvider,
+      resourceAttributes: getResourceAttributes(options),
+      unregisterOnClose: options.unregisterOnShutdown,
+      spanProcessors: [spanProcessor],
+    });
+  } catch (error) {
+    cleanupUnusedTelemetryObjects(exporterRegistration, spanProcessorRegistration);
+    throw error;
+  }
 
   if (!providerRegistration.providerRegistered) {
+    cleanupUnusedTelemetryObjects(exporterRegistration, spanProcessorRegistration);
     throw new Error(
       "RawTree could not register OpenTelemetry because another tracer provider is already active. "
         + "Use RawTreeTraceExporter with your existing OTel setup, or pass forceRegisterProvider: true.",
@@ -60,6 +73,7 @@ export function registerOTel(options: RawTreeRegisterOtelOptions): RawTreeOtelHa
   }
 
   if (!providerRegistration.created) {
+    cleanupUnusedTelemetryObjects(exporterRegistration, spanProcessorRegistration);
     throw new Error(
       "RawTree OpenTelemetry is already registered in this process. "
         + "Call shutdown() before registering another RawTree OTel provider.",
@@ -67,31 +81,24 @@ export function registerOTel(options: RawTreeRegisterOtelOptions): RawTreeOtelHa
   }
 
   const integrationTeardowns: RawTreeIntegrationTeardown[] = [];
-  const integrationSetupTasks: Promise<void>[] = [];
-  const integrationSetupErrors: unknown[] = [];
 
   try {
     for (const integration of options.integrations ?? []) {
       const setupResult = integration.setupOtel?.({ serviceName: options.serviceName });
 
       if (isPromiseLike(setupResult)) {
-        integrationSetupTasks.push(
-          Promise.resolve(setupResult)
-            .then((teardown) => {
-              if (typeof teardown === "function") {
-                integrationTeardowns.push(teardown);
-              }
-            })
-            .catch((error) => {
-              integrationSetupErrors.push(error);
-            }),
+        void Promise.resolve(setupResult).catch(() => undefined);
+        throw new Error(
+          `RawTree integration "${integration.name}" returned an async setupOtel result. `
+            + "OpenTelemetry integrations must set up synchronously.",
         );
       } else if (typeof setupResult === "function") {
         integrationTeardowns.push(setupResult);
       }
     }
   } catch (error) {
-    void providerRegistration.shutdown();
+    cleanupIntegrationTeardowns(integrationTeardowns);
+    void shutdownRawTreeTracerProvider();
     throw error;
   }
 
@@ -106,24 +113,32 @@ export function registerOTel(options: RawTreeRegisterOtelOptions): RawTreeOtelHa
       }
 
       isShutdown = true;
-      await Promise.all(integrationSetupTasks);
 
       for (const teardown of integrationTeardowns.splice(0)) {
         await teardown();
       }
 
       await providerRegistration.shutdown();
-
-      if (integrationSetupErrors.length > 0) {
-        throw toError(integrationSetupErrors[0]);
-      }
     },
   };
 }
 
-function toExporter(options: RawTreeRegisterOtelOptions): RawTreeTraceExporter {
+interface ExporterRegistration {
+  exporter: RawTreeTraceExporter;
+  ownsExporter: boolean;
+}
+
+interface SpanProcessorRegistration {
+  spanProcessor: SpanProcessor;
+  ownsSpanProcessor: boolean;
+}
+
+function toExporter(options: RawTreeRegisterOtelOptions): ExporterRegistration {
   if (hasCustomExporter(options)) {
-    return options.exporter;
+    return {
+      exporter: options.exporter,
+      ownsExporter: false,
+    };
   }
 
   const {
@@ -138,9 +153,12 @@ function toExporter(options: RawTreeRegisterOtelOptions): RawTreeTraceExporter {
     ...exporterOptions
   } = options;
 
-  return new RawTreeTraceExporter({
-    ...exporterOptions,
-  });
+  return {
+    exporter: new RawTreeTraceExporter({
+      ...exporterOptions,
+    }),
+    ownsExporter: true,
+  };
 }
 
 function getResourceAttributes(options: RawTreeRegisterOtelOptions): Attributes | undefined {
@@ -164,16 +182,25 @@ function hasCustomExporter(
 function toSpanProcessor(
   options: RawTreeRegisterOtelOptions,
   exporter: RawTreeTraceExporter,
-): SpanProcessor {
+): SpanProcessorRegistration {
   if (typeof options.spanProcessor === "object") {
-    return options.spanProcessor;
+    return {
+      spanProcessor: options.spanProcessor,
+      ownsSpanProcessor: false,
+    };
   }
 
   if (options.spanProcessor === "simple") {
-    return new SimpleSpanProcessor(exporter);
+    return {
+      spanProcessor: new SimpleSpanProcessor(exporter),
+      ownsSpanProcessor: true,
+    };
   }
 
-  return new BatchSpanProcessor(exporter, options.batchSpanProcessorOptions);
+  return {
+    spanProcessor: new BatchSpanProcessor(exporter, options.batchSpanProcessorOptions),
+    ownsSpanProcessor: true,
+  };
 }
 
 function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> {
@@ -183,8 +210,22 @@ function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> {
     && typeof value.then === "function";
 }
 
-function toError(error: unknown): Error {
-  return error instanceof Error
-    ? error
-    : new Error(typeof error === "string" ? error : JSON.stringify(error));
+function cleanupUnusedTelemetryObjects(
+  exporterRegistration: ExporterRegistration,
+  spanProcessorRegistration: SpanProcessorRegistration,
+): void {
+  if (spanProcessorRegistration.ownsSpanProcessor) {
+    void spanProcessorRegistration.spanProcessor.shutdown().catch(() => undefined);
+    return;
+  }
+
+  if (exporterRegistration.ownsExporter) {
+    void exporterRegistration.exporter.shutdown().catch(() => undefined);
+  }
+}
+
+function cleanupIntegrationTeardowns(teardowns: RawTreeIntegrationTeardown[]): void {
+  for (const teardown of teardowns.splice(0)) {
+    void Promise.resolve(teardown()).catch(() => undefined);
+  }
 }

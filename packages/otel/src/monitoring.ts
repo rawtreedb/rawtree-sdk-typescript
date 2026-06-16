@@ -67,7 +67,7 @@ export interface RawTreeIntegration {
   ) => void | RawTreeIntegrationTeardown | Promise<void | RawTreeIntegrationTeardown>;
   setupOtel?: (
     context: RawTreeOtelIntegrationContext,
-  ) => void | RawTreeIntegrationTeardown | Promise<void | RawTreeIntegrationTeardown>;
+  ) => void | RawTreeIntegrationTeardown;
 }
 
 export interface RawTreeMonitoringOptions extends RawTreeOptions {

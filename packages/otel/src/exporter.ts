@@ -90,8 +90,8 @@ export class RawTreeTraceExporter implements SpanExporter {
       return;
     }
 
-    await this.forceFlush();
     this.isShutdown = true;
+    await this.forceFlush();
     await this.client.close();
   }
 

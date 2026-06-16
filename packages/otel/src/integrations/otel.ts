@@ -35,6 +35,7 @@ export interface RawTreeTracerProviderRegistration {
   isEnabled: boolean;
   providerRegistered: boolean;
   created: boolean;
+  forceFlush: () => Promise<void>;
   shutdown: () => Promise<void>;
 }
 
@@ -108,8 +109,12 @@ export function registerRawTreeTracerProvider(
     isEnabled: registration.providerRegistered,
     providerRegistered: registration.providerRegistered,
     created: registration.created,
+    forceFlush: async () => {
+      await provider?.forceFlush();
+    },
     shutdown: async () => {
       if (options.unregisterOnClose === false) {
+        await provider?.forceFlush();
         return;
       }
 
