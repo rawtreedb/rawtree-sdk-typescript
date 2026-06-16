@@ -346,7 +346,7 @@ function normalizeSpanKind(kind: number): string | number {
   return kinds[kind] ?? kind;
 }
 
-function hrTimeToUnixNano(time: readonly [number, number]): string {
+export function hrTimeToUnixNano(time: readonly [number, number]): string {
   return (BigInt(time[0]) * 1_000_000_000n + BigInt(time[1])).toString();
 }
 

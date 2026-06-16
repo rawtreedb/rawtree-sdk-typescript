@@ -13,6 +13,10 @@ export interface RequestOptions {
   headers?: HeadersInit;
 }
 
+export interface InsertOptions extends RequestOptions {
+  transform?: string;
+}
+
 export interface QueryRequest {
   sql: string;
 }
@@ -174,13 +178,18 @@ export class RawTree {
   insert<Row extends JsonObject = JsonObject>(
     table: string,
     rows: Row | Row[],
-    options?: RequestOptions,
+    options?: InsertOptions,
   ): Promise<InsertResponse> {
+    const { transform, ...requestOptions } = options ?? {};
+    const query = transform
+      ? `?transform=${encodeURIComponent(transform)}`
+      : "";
+
     return this.request<InsertResponse>({
       method: "POST",
-      path: `/v1/tables/${encodeURIComponent(table)}`,
+      path: `/v1/tables/${encodeURIComponent(table)}${query}`,
       body: rows,
-      ...options,
+      ...requestOptions,
     });
   }
 

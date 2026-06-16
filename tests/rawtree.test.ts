@@ -21,6 +21,18 @@ function jsonResponse(body: unknown, init?: ResponseInit): Response {
   });
 }
 
+function firstOtlpExport(fetchMock: ReturnType<typeof vi.fn>) {
+  return JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
+}
+
+function firstOtlpSpan(fetchMock: ReturnType<typeof vi.fn>) {
+  return firstOtlpExport(fetchMock).resourceSpans[0].scopeSpans[0].spans[0];
+}
+
+function firstOtlpResource(fetchMock: ReturnType<typeof vi.fn>) {
+  return firstOtlpExport(fetchMock).resourceSpans[0].resource;
+}
+
 describe("RawTree", () => {
   it("requires a non-empty api key", () => {
     expect(() => new RawTree({ apiKey: "" })).toThrow("apiKey");
@@ -86,6 +98,27 @@ describe("RawTree", () => {
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify([{ event: "signup" }, { event: "purchase" }]),
+      }),
+    );
+  });
+
+  it("inserts with a transform", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const rawtree = new RawTree({
+      apiKey: "rw_test",
+      baseUrl: "https://example.com/",
+      fetch: fetchMock,
+    });
+
+    await rawtree.insert("traces", { resourceSpans: [] }, {
+      transform: "otlp-traces",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://example.com/v1/tables/traces?transform=otlp-traces",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ resourceSpans: [] }),
       }),
     );
   });
@@ -247,34 +280,44 @@ describe("RawTree", () => {
       await otel.shutdown().catch(() => undefined);
     }
 
-    const rows = fetchMock.mock.calls.flatMap((call) => JSON.parse(call[1]?.body as string));
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.rawtree.com/v1/tables/traces");
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
-      type: "otel.span",
-      source: "otel",
-      status: "ok",
-      payload: {
-        name: "GET /api/chat",
-        kind: "internal",
-        attributes: {
-          "http.route": "/api/chat",
-          "app.tenant": "team_123",
-        },
-        scope: {
-          name: "rawtree-register-otel-test",
-        },
-        resource: {
-          attributes: {
-            "service.name": "api",
-          },
-        },
+    const exportBody = firstOtlpExport(fetchMock);
+    const otlpSpan = firstOtlpSpan(fetchMock);
+    const otlpResource = firstOtlpResource(fetchMock);
+
+    expect(fetchMock.mock.calls[0]?.[0])
+      .toBe("https://api.rawtree.com/v1/tables/traces?transform=otlp-traces");
+    expect(exportBody.resourceSpans).toHaveLength(1);
+    expect(otlpSpan).toMatchObject({
+      name: "GET /api/chat",
+      kind: 1,
+      status: {
+        code: SpanStatusCode.OK,
       },
+      attributes: [
+        {
+          key: "http.route",
+          value: { stringValue: "/api/chat" },
+        },
+        {
+          key: "app.tenant",
+          value: { stringValue: "team_123" },
+        },
+      ],
     });
-    expect(rows[0]?.service).toBeUndefined();
-    expect(rows[0]?.trace_id).toEqual(expect.any(String));
-    expect(rows[0]?.span_id).toEqual(expect.any(String));
-    expect(rows[0]?.duration_ms).toEqual(expect.any(Number));
+    expect(otlpResource).toMatchObject({
+      attributes: [
+        {
+          key: "service.name",
+          value: { stringValue: "api" },
+        },
+      ],
+    });
+    expect(exportBody.resourceSpans[0].scopeSpans[0].scope.name)
+      .toBe("rawtree-register-otel-test");
+    expect(otlpSpan.traceId).toEqual(expect.any(String));
+    expect(otlpSpan.spanId).toEqual(expect.any(String));
+    expect(otlpSpan.startTimeUnixNano).toEqual(expect.any(String));
+    expect(otlpSpan.endTimeUnixNano).toEqual(expect.any(String));
   });
 
   it("flushes pending spans when provider unregister is disabled", async () => {
@@ -300,14 +343,10 @@ describe("RawTree", () => {
       await shutdownRawTreeTracerProvider();
     }
 
-    const rows = fetchMock.mock.calls.flatMap((call) => JSON.parse(call[1]?.body as string));
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
-      type: "otel.span",
-      source: "otel",
-      payload: {
-        name: "buffered span",
-      },
+    expect(fetchMock.mock.calls[0]?.[0])
+      .toBe("https://api.rawtree.com/v1/tables/traces?transform=otlp-traces");
+    expect(firstOtlpSpan(fetchMock)).toMatchObject({
+      name: "buffered span",
     });
   });
 
@@ -362,14 +401,10 @@ describe("RawTree", () => {
       await otel.shutdown().catch(() => undefined);
     }
 
-    const rows = fetchMock.mock.calls.flatMap((call) => JSON.parse(call[1]?.body as string));
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
-      type: "otel.span",
-      source: "otel",
-      payload: {
-        name: "after failed duplicate registration",
-      },
+    expect(fetchMock.mock.calls[0]?.[0])
+      .toBe("https://api.rawtree.com/v1/tables/traces?transform=otlp-traces");
+    expect(firstOtlpSpan(fetchMock)).toMatchObject({
+      name: "after failed duplicate registration",
     });
   });
 
@@ -433,20 +468,21 @@ describe("RawTree", () => {
       await otel.shutdown().catch(() => undefined);
     }
 
-    const rows = traceFetchMock.mock.calls.flatMap((call) => JSON.parse(call[1]?.body as string));
     expect(monitorFetchMock).not.toHaveBeenCalled();
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
-      type: "otel.span",
-      source: "otel",
-      payload: {
-        name: "after monitoring close",
-        resource: {
-          attributes: {
-            "service.name": "api",
+    expect(traceFetchMock.mock.calls[0]?.[0])
+      .toBe("https://api.rawtree.com/v1/tables/traces?transform=otlp-traces");
+    expect(firstOtlpSpan(traceFetchMock)).toMatchObject({
+      name: "after monitoring close",
+    });
+    expect(firstOtlpResource(traceFetchMock)).toMatchObject({
+      attributes: [
+        {
+          key: "service.name",
+          value: {
+            stringValue: "api",
           },
         },
-      },
+      ],
     });
   });
 

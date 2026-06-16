@@ -126,17 +126,20 @@ See `examples/ai-sdk` in this repository for a runnable harness agent example.
 ## What RawTree Receives
 
 `registerOTel()` sends OpenTelemetry trace spans to the `traces` table by
-default. Each row has:
+default using RawTree's `otlp-traces` transform. The exporter posts OTLP JSON to:
 
-- `type: "otel.span"`
-- `source: "otel"`
-- `trace_id`, `span_id`, and `parent_span_id`
-- a `payload` object with the span name, timing, status, attributes, resource,
-  scope, events, and links
+```text
+/v1/tables/traces?transform=otlp-traces
+```
+
+RawTree stores one row per span. Each row starts with the OTLP span fields such
+as `traceId`, `spanId`, `parentSpanId`, `name`, `startTimeUnixNano`,
+`endTimeUnixNano`, `attributes`, `events`, `links`, and `status`. RawTree also
+merges resource attributes such as `service.name`, and adds `scope.name` when
+the source scope has a name.
 
 `serviceName` is stored as the standard OpenTelemetry resource attribute
-`service.name`. RawTree can ingest the nested object as-is and flatten it at
-query time.
+`service.name`.
 
 The package currently exports traces. Future logs and metrics support should use
 the default RawTree tables `logs` and `metrics`.
@@ -242,8 +245,7 @@ new RawTreeTraceExporter({
   apiKey: string;
   baseUrl?: string;
   fetch?: typeof fetch;
-  eventName?: string;
-  source?: string;
+  table?: string;
 });
 ```
 

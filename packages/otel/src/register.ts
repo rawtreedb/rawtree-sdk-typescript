@@ -19,6 +19,8 @@ import {
 
 export interface RawTreeRegisterOtelBaseOptions {
   serviceName?: string;
+  environment?: string;
+  release?: string;
   attributes?: Attributes;
   integrations?: RawTreeIntegration[];
   spanProcessor?: "batch" | "simple" | SpanProcessor;
@@ -186,6 +188,9 @@ function getResourceAttributes(options: RawTreeRegisterOtelOptions): Attributes 
   const attributes = {
     ...options.attributes,
     "service.name": options.serviceName ?? options.attributes?.["service.name"],
+    "deployment.environment.name": options.environment
+      ?? options.attributes?.["deployment.environment.name"],
+    "service.version": options.release ?? options.attributes?.["service.version"],
   };
   const entries = Object.entries(attributes).filter(([, value]) => value !== undefined);
 

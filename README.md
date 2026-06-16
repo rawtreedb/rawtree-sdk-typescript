@@ -101,13 +101,11 @@ try {
 }
 ```
 
-OpenTelemetry trace spans are stored in the `traces` table as `otel.span` with
-the original span name, attributes, resource, scope, and timing preserved in the
-payload. Spans created under the same active context share `trace_id`, `span_id`,
-and `parent_span_id`. `serviceName` is stored as the canonical OTel resource
-attribute `service.name`, so RawTree can flatten and query it from the ingested
-object. Future log and metric exporters should follow the same signal naming
-convention with `logs` and `metrics` tables by default.
+OpenTelemetry trace spans are sent to RawTree as OTLP JSON through
+`transform=otlp-traces`. RawTree stores one row per span in the `traces` table,
+with the original span fields plus merged resource attributes such as
+`service.name` and `scope.name`. Future log and metric exporters should follow
+the same signal naming convention with `logs` and `metrics` tables by default.
 
 The Sentry-style monitoring client is still available for manual events:
 
@@ -161,9 +159,12 @@ rawtree.query<Row = unknown>(
 rawtree.insert<Row extends JsonObject = JsonObject>(
   table: string,
   rows: Row | Row[],
-  options?: RequestOptions,
+  options?: InsertOptions,
 ): Promise<InsertResponse>;
 ```
+
+`InsertOptions.transform` can be used with built-in RawTree transforms such as
+`otlp-traces`, `otlp-logs`, and `otlp-metrics`.
 
 ### tables
 
