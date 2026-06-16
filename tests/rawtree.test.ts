@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { generateText } from "ai";
-import { SpanStatusCode, trace } from "@opentelemetry/api";
+import { metrics, SpanStatusCode, trace } from "@opentelemetry/api";
+import { MeterProvider } from "@opentelemetry/sdk-metrics";
 import { RawTree, RawTreeError, type QueryResponse } from "../packages/sdk/src/index.js";
 import {
   aiSdkIntegration,
@@ -8,6 +9,7 @@ import {
   initRawTree,
   RawTreeTraceExporter,
   registerOTel,
+  shutdownRawTreeMeterProvider,
   shutdownRawTreeTracerProvider,
 } from "../packages/otel/src/index.js";
 
@@ -26,12 +28,40 @@ function firstOtlpExport(fetchMock: ReturnType<typeof vi.fn>) {
   return JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
 }
 
+function otlpExportFor(fetchMock: ReturnType<typeof vi.fn>, url: string) {
+  const call = fetchMock.mock.calls.find(([requestUrl]) => requestUrl === url);
+
+  expect(call).toBeDefined();
+
+  return JSON.parse(call?.[1]?.body as string);
+}
+
 function firstOtlpSpan(fetchMock: ReturnType<typeof vi.fn>) {
   return firstOtlpExport(fetchMock).resourceSpans[0].scopeSpans[0].spans[0];
 }
 
+function firstOtlpSpanFor(fetchMock: ReturnType<typeof vi.fn>, url: string) {
+  return otlpExportFor(fetchMock, url).resourceSpans[0].scopeSpans[0].spans[0];
+}
+
 function firstOtlpResource(fetchMock: ReturnType<typeof vi.fn>) {
   return firstOtlpExport(fetchMock).resourceSpans[0].resource;
+}
+
+function firstOtlpResourceFor(fetchMock: ReturnType<typeof vi.fn>, url: string) {
+  return otlpExportFor(fetchMock, url).resourceSpans[0].resource;
+}
+
+function firstOtlpMetricFor(fetchMock: ReturnType<typeof vi.fn>, url: string) {
+  return otlpExportFor(fetchMock, url).resourceMetrics[0].scopeMetrics[0].metrics[0];
+}
+
+function firstOtlpMetricResourceFor(fetchMock: ReturnType<typeof vi.fn>, url: string) {
+  return otlpExportFor(fetchMock, url).resourceMetrics[0].resource;
+}
+
+function firstOtlpMetricScopeFor(fetchMock: ReturnType<typeof vi.fn>, url: string) {
+  return otlpExportFor(fetchMock, url).resourceMetrics[0].scopeMetrics[0].scope;
 }
 
 const DAYTONA_OTEL_ENV_KEYS = [
@@ -367,6 +397,7 @@ describe("RawTree", () => {
 
       await otel.shutdown();
     } finally {
+      await shutdownRawTreeMeterProvider();
       await shutdownRawTreeTracerProvider();
     }
 
@@ -435,10 +466,12 @@ describe("RawTree", () => {
     });
   });
 
-  it("captures Daytona spans through registerOTel integration", async () => {
+  it("captures Daytona spans and metrics through registerOTel integration", async () => {
     const envSnapshot = snapshotEnv(DAYTONA_OTEL_ENV_KEYS);
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
     let otel: ReturnType<typeof registerOTel> | undefined;
+    const tracesUrl = "https://rawtree.internal/v1/tables/traces?transform=otlp-traces";
+    const metricsUrl = "https://rawtree.internal/v1/tables/metrics?transform=otlp-metrics";
 
     process.env.DAYTONA_OTEL_ENABLED = "true";
     process.env.DAYTONA_EXPERIMENTAL_OTEL_ENABLED = "true";
@@ -458,6 +491,12 @@ describe("RawTree", () => {
       expect(process.env.DAYTONA_OTEL_ENABLED).toBe("false");
       expect(process.env.DAYTONA_EXPERIMENTAL_OTEL_ENABLED).toBe("false");
 
+      const histogram = metrics
+        .getMeter("rawtree-daytona-integration-test")
+        .createHistogram("daytona_create_duration", {
+          description: "Duration of Daytona.create calls.",
+          unit: "ms",
+        });
       const span = trace
         .getTracer("rawtree-daytona-integration-test")
         .startSpan("Daytona.create", {
@@ -467,14 +506,17 @@ describe("RawTree", () => {
           },
         });
       span.end();
+      histogram.record(42, {
+        component: "Daytona",
+        method: "create",
+        status: "success",
+      });
 
       await otel.shutdown();
 
       expect(process.env.DAYTONA_OTEL_ENABLED).toBe("true");
       expect(process.env.DAYTONA_EXPERIMENTAL_OTEL_ENABLED).toBe("true");
-      expect(fetchMock.mock.calls[0]?.[0])
-        .toBe("https://rawtree.internal/v1/tables/traces?transform=otlp-traces");
-      expect(firstOtlpSpan(fetchMock)).toMatchObject({
+      expect(firstOtlpSpanFor(fetchMock, tracesUrl)).toMatchObject({
         name: "Daytona.create",
         attributes: expect.arrayContaining([
           {
@@ -487,7 +529,42 @@ describe("RawTree", () => {
           },
         ]),
       });
-      expect(firstOtlpResource(fetchMock)).toMatchObject({
+      expect(firstOtlpResourceFor(fetchMock, tracesUrl)).toMatchObject({
+        attributes: [
+          {
+            key: "service.name",
+            value: { stringValue: "api" },
+          },
+        ],
+      });
+      expect(firstOtlpMetricFor(fetchMock, metricsUrl)).toMatchObject({
+        name: "daytona_create_duration",
+        description: "Duration of Daytona.create calls.",
+        unit: "ms",
+        histogram: {
+          dataPoints: expect.arrayContaining([
+            expect.objectContaining({
+              attributes: expect.arrayContaining([
+                {
+                  key: "component",
+                  value: { stringValue: "Daytona" },
+                },
+                {
+                  key: "method",
+                  value: { stringValue: "create" },
+                },
+                {
+                  key: "status",
+                  value: { stringValue: "success" },
+                },
+              ]),
+            }),
+          ]),
+        },
+      });
+      expect(firstOtlpMetricScopeFor(fetchMock, metricsUrl).name)
+        .toBe("rawtree-daytona-integration-test");
+      expect(firstOtlpMetricResourceFor(fetchMock, metricsUrl)).toMatchObject({
         attributes: [
           {
             key: "service.name",
@@ -499,6 +576,44 @@ describe("RawTree", () => {
       await otel?.shutdown().catch(() => undefined);
       restoreEnv(envSnapshot);
     }
+  });
+
+  it("allows metrics to be disabled when another meter provider is active", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const externalMeterProvider = new MeterProvider();
+    let otel: ReturnType<typeof registerOTel> | undefined;
+
+    metrics.disable();
+    expect(metrics.setGlobalMeterProvider(externalMeterProvider)).toBe(true);
+
+    try {
+      otel = registerOTel({
+        apiKey: "rw_test",
+        serviceName: "api",
+        spanProcessor: "simple",
+        metrics: false,
+        fetch: fetchMock,
+      });
+
+      expect(otel.meterProviderRegistered).toBe(false);
+
+      const span = trace
+        .getTracer("rawtree-register-otel-metrics-disabled-test")
+        .startSpan("metrics disabled");
+      span.end();
+
+      await otel.shutdown();
+    } finally {
+      await otel?.shutdown().catch(() => undefined);
+      metrics.disable();
+      await externalMeterProvider.shutdown();
+    }
+
+    expect(fetchMock.mock.calls[0]?.[0])
+      .toBe("https://api.rawtree.com/v1/tables/traces?transform=otlp-traces");
+    expect(firstOtlpSpan(fetchMock)).toMatchObject({
+      name: "metrics disabled",
+    });
   });
 
   it("restores absent Daytona OTEL guard environment on shutdown", async () => {

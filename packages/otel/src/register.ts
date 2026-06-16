@@ -1,4 +1,11 @@
 import {
+  MetricReader,
+  PeriodicExportingMetricReader,
+  type PeriodicExportingMetricReaderOptions,
+  type PushMetricExporter,
+  type ResourceMetrics,
+} from "@opentelemetry/sdk-metrics";
+import {
   BatchSpanProcessor,
   SimpleSpanProcessor,
   type BufferConfig,
@@ -12,7 +19,14 @@ import {
   type RawTreeIntegrationTeardown,
   type RawTreeOtelIntegrationContext,
 } from "./client.js";
-import { RawTreeTraceExporter, type RawTreeTraceExporterOptions } from "./exporter.js";
+import {
+  RawTreeMetricExporter,
+  RawTreeTraceExporter,
+} from "./exporter.js";
+import {
+  registerRawTreeMeterProvider,
+  shutdownRawTreeMeterProvider,
+} from "./metrics.js";
 import {
   registerRawTreeTracerProvider,
   shutdownRawTreeTracerProvider,
@@ -26,6 +40,10 @@ export interface RawTreeRegisterOtelBaseOptions {
   integrations?: RawTreeIntegration[];
   spanProcessor?: "batch" | "simple" | SpanProcessor;
   batchSpanProcessorOptions?: BufferConfig;
+  metrics?: boolean;
+  metricExporter?: RawTreeMetricExporter;
+  metricReader?: "periodic" | MetricReader;
+  metricReaderOptions?: Omit<PeriodicExportingMetricReaderOptions, "exporter">;
   forceRegisterProvider?: boolean;
   unregisterOnShutdown?: boolean;
 }
@@ -35,8 +53,10 @@ export interface RawTreeRegisterOtelExporterOptions extends RawTreeRegisterOtelB
 }
 
 export interface RawTreeRegisterOtelRawTreeOptions
-  extends RawTreeRegisterOtelBaseOptions,
-    Omit<RawTreeTraceExporterOptions, "service" | "table" | "batch" | "attributes"> {
+  extends RawTreeRegisterOtelBaseOptions {
+  apiKey: string;
+  baseUrl?: string;
+  fetch?: typeof fetch;
   exporter?: never;
 }
 
@@ -46,7 +66,9 @@ export type RawTreeRegisterOtelOptions =
 
 export interface RawTreeOtelHandle {
   exporter: RawTreeTraceExporter;
+  metricExporter?: RawTreeMetricExporter;
   providerRegistered: boolean;
+  meterProviderRegistered: boolean;
   shutdown: () => Promise<void>;
 }
 
@@ -55,7 +77,11 @@ export function registerOTel(options: RawTreeRegisterOtelOptions): RawTreeOtelHa
   const exporter = exporterRegistration.exporter;
   const spanProcessorRegistration = toSpanProcessor(options, exporterRegistration);
   const spanProcessor = spanProcessorRegistration.spanProcessor;
+  const metricExporterRegistration = toMetricExporter(options);
+  const metricReaderRegistration = toMetricReader(options, metricExporterRegistration);
+  const metricReader = metricReaderRegistration.metricReader;
   let providerRegistration: ReturnType<typeof registerRawTreeTracerProvider>;
+  let meterProviderRegistration: ReturnType<typeof registerRawTreeMeterProvider> | undefined;
 
   try {
     providerRegistration = registerRawTreeTracerProvider({
@@ -65,12 +91,22 @@ export function registerOTel(options: RawTreeRegisterOtelOptions): RawTreeOtelHa
       spanProcessors: [spanProcessor],
     });
   } catch (error) {
-    cleanupUnusedTelemetryObjects(exporterRegistration, spanProcessorRegistration);
+    cleanupUnusedTelemetryObjects(
+      exporterRegistration,
+      spanProcessorRegistration,
+      metricExporterRegistration,
+      metricReaderRegistration,
+    );
     throw error;
   }
 
   if (!providerRegistration.providerRegistered) {
-    cleanupUnusedTelemetryObjects(exporterRegistration, spanProcessorRegistration);
+    cleanupUnusedTelemetryObjects(
+      exporterRegistration,
+      spanProcessorRegistration,
+      metricExporterRegistration,
+      metricReaderRegistration,
+    );
     throw new Error(
       "RawTree could not register OpenTelemetry because another tracer provider is already active. "
         + "Use RawTreeTraceExporter with your existing OTel setup, or pass forceRegisterProvider: true.",
@@ -78,11 +114,50 @@ export function registerOTel(options: RawTreeRegisterOtelOptions): RawTreeOtelHa
   }
 
   if (!providerRegistration.created) {
-    cleanupUnusedTelemetryObjects(exporterRegistration, spanProcessorRegistration);
+    cleanupUnusedTelemetryObjects(
+      exporterRegistration,
+      spanProcessorRegistration,
+      metricExporterRegistration,
+      metricReaderRegistration,
+    );
     throw new Error(
       "RawTree OpenTelemetry is already registered in this process. "
         + "Call shutdown() before registering another RawTree OTel provider.",
     );
+  }
+
+  if (metricReader) {
+    try {
+      meterProviderRegistration = registerRawTreeMeterProvider({
+        forceRegisterProvider: options.forceRegisterProvider,
+        resourceAttributes: getResourceAttributes(options),
+        unregisterOnClose: options.unregisterOnShutdown,
+        metricReaders: [metricReader],
+      });
+    } catch (error) {
+      cleanupUnusedMetricTelemetryObjects(metricExporterRegistration, metricReaderRegistration);
+      void shutdownRawTreeTracerProvider().catch(() => undefined);
+      throw error;
+    }
+
+    if (!meterProviderRegistration.providerRegistered) {
+      cleanupUnusedMetricTelemetryObjects(metricExporterRegistration, metricReaderRegistration);
+      void shutdownRawTreeTracerProvider().catch(() => undefined);
+      throw new Error(
+        "RawTree could not register OpenTelemetry metrics because another meter provider is already active. "
+          + "Use RawTreeMetricExporter with your existing OTel setup, pass metrics: false, "
+          + "or pass forceRegisterProvider: true.",
+      );
+    }
+
+    if (!meterProviderRegistration.created) {
+      cleanupUnusedMetricTelemetryObjects(metricExporterRegistration, metricReaderRegistration);
+      void shutdownRawTreeTracerProvider().catch(() => undefined);
+      throw new Error(
+        "RawTree OpenTelemetry metrics are already registered in this process. "
+          + "Call shutdown() before registering another RawTree OTel provider.",
+      );
+    }
   }
 
   const integrationTeardowns: RawTreeIntegrationTeardown[] = [];
@@ -104,6 +179,7 @@ export function registerOTel(options: RawTreeRegisterOtelOptions): RawTreeOtelHa
     }
   } catch (error) {
     cleanupIntegrationTeardowns(integrationTeardowns);
+    void shutdownRawTreeMeterProvider().catch(() => undefined);
     void shutdownRawTreeTracerProvider().catch(() => undefined);
     throw error;
   }
@@ -112,7 +188,9 @@ export function registerOTel(options: RawTreeRegisterOtelOptions): RawTreeOtelHa
 
   return {
     exporter,
+    metricExporter: metricExporterRegistration.metricExporter,
     providerRegistered: providerRegistration.providerRegistered,
+    meterProviderRegistered: meterProviderRegistration?.providerRegistered ?? false,
     shutdown: async () => {
       if (isShutdown) {
         return;
@@ -128,21 +206,33 @@ export function registerOTel(options: RawTreeRegisterOtelOptions): RawTreeOtelHa
         teardownError = error;
       }
 
+      const shutdownErrors: unknown[] = [];
+
+      if (teardownError) {
+        shutdownErrors.push(teardownError);
+      }
+
+      try {
+        await meterProviderRegistration?.shutdown();
+      } catch (shutdownError) {
+        shutdownErrors.push(shutdownError);
+      }
+
       try {
         await providerRegistration.shutdown();
       } catch (shutdownError) {
-        if (teardownError) {
-          throw new AggregateError(
-            [teardownError, shutdownError],
-            "RawTree OpenTelemetry shutdown failed.",
-          );
-        }
-
-        throw shutdownError;
+        shutdownErrors.push(shutdownError);
       }
 
-      if (teardownError) {
-        throw teardownError;
+      if (shutdownErrors.length === 1) {
+        throw shutdownErrors[0];
+      }
+
+      if (shutdownErrors.length > 1) {
+        throw new AggregateError(
+          shutdownErrors,
+          "RawTree OpenTelemetry shutdown failed.",
+        );
       }
     },
   };
@@ -156,6 +246,16 @@ interface ExporterRegistration {
 interface SpanProcessorRegistration {
   spanProcessor: SpanProcessor;
   ownsSpanProcessor: boolean;
+}
+
+interface MetricExporterRegistration {
+  metricExporter?: RawTreeMetricExporter;
+  ownsMetricExporter: boolean;
+}
+
+interface MetricReaderRegistration {
+  metricReader?: MetricReader;
+  ownsMetricReader: boolean;
 }
 
 function toExporter(options: RawTreeRegisterOtelOptions): ExporterRegistration {
@@ -173,6 +273,10 @@ function toExporter(options: RawTreeRegisterOtelOptions): ExporterRegistration {
     integrations: _integrations,
     spanProcessor: _spanProcessor,
     batchSpanProcessorOptions: _batchSpanProcessorOptions,
+    metrics: _metrics,
+    metricExporter: _metricExporter,
+    metricReader: _metricReader,
+    metricReaderOptions: _metricReaderOptions,
     forceRegisterProvider: _forceRegisterProvider,
     unregisterOnShutdown: _unregisterOnShutdown,
     ...exporterOptions
@@ -183,6 +287,36 @@ function toExporter(options: RawTreeRegisterOtelOptions): ExporterRegistration {
       ...exporterOptions,
     }),
     ownsExporter: true,
+  };
+}
+
+function toMetricExporter(options: RawTreeRegisterOtelOptions): MetricExporterRegistration {
+  if (options.metrics === false) {
+    return {
+      ownsMetricExporter: false,
+    };
+  }
+
+  if (options.metricExporter) {
+    return {
+      metricExporter: options.metricExporter,
+      ownsMetricExporter: false,
+    };
+  }
+
+  if (hasCustomExporter(options)) {
+    return {
+      ownsMetricExporter: false,
+    };
+  }
+
+  return {
+    metricExporter: new RawTreeMetricExporter({
+      apiKey: options.apiKey,
+      baseUrl: options.baseUrl,
+      fetch: options.fetch,
+    }),
+    ownsMetricExporter: true,
   };
 }
 
@@ -249,6 +383,36 @@ function toSpanProcessor(
   };
 }
 
+function toMetricReader(
+  options: RawTreeRegisterOtelOptions,
+  metricExporterRegistration: MetricExporterRegistration,
+): MetricReaderRegistration {
+  if (!metricExporterRegistration.metricExporter) {
+    return {
+      ownsMetricReader: false,
+    };
+  }
+
+  if (typeof options.metricReader === "object") {
+    return {
+      metricReader: options.metricReader,
+      ownsMetricReader: false,
+    };
+  }
+
+  const exporter = metricExporterRegistration.ownsMetricExporter
+    ? metricExporterRegistration.metricExporter
+    : new NonClosingMetricExporter(metricExporterRegistration.metricExporter);
+
+  return {
+    metricReader: new PeriodicExportingMetricReader({
+      ...options.metricReaderOptions,
+      exporter,
+    }),
+    ownsMetricReader: true,
+  };
+}
+
 function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> {
   return typeof value === "object"
     && value !== null
@@ -259,14 +423,32 @@ function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> {
 function cleanupUnusedTelemetryObjects(
   exporterRegistration: ExporterRegistration,
   spanProcessorRegistration: SpanProcessorRegistration,
+  metricExporterRegistration: MetricExporterRegistration,
+  metricReaderRegistration: MetricReaderRegistration,
 ): void {
   if (spanProcessorRegistration.ownsSpanProcessor) {
     void spanProcessorRegistration.spanProcessor.shutdown().catch(() => undefined);
+  } else if (exporterRegistration.ownsExporter) {
+    void exporterRegistration.exporter.shutdown().catch(() => undefined);
+  }
+
+  cleanupUnusedMetricTelemetryObjects(metricExporterRegistration, metricReaderRegistration);
+}
+
+function cleanupUnusedMetricTelemetryObjects(
+  metricExporterRegistration: MetricExporterRegistration,
+  metricReaderRegistration: MetricReaderRegistration,
+): void {
+  if (metricReaderRegistration.ownsMetricReader && metricReaderRegistration.metricReader) {
+    void metricReaderRegistration.metricReader.shutdown().catch(() => undefined);
     return;
   }
 
-  if (exporterRegistration.ownsExporter) {
-    void exporterRegistration.exporter.shutdown().catch(() => undefined);
+  if (
+    metricExporterRegistration.ownsMetricExporter
+    && metricExporterRegistration.metricExporter
+  ) {
+    void metricExporterRegistration.metricExporter.shutdown().catch(() => undefined);
   }
 }
 
@@ -282,6 +464,31 @@ class NonClosingSpanExporter implements SpanExporter {
 
   async forceFlush(): Promise<void> {
     await this.exporter.forceFlush();
+  }
+
+  async shutdown(): Promise<void> {
+    await this.exporter.forceFlush();
+  }
+}
+
+class NonClosingMetricExporter implements PushMetricExporter {
+  constructor(private readonly exporter: RawTreeMetricExporter) {}
+
+  export(
+    metrics: ResourceMetrics,
+    resultCallback: Parameters<PushMetricExporter["export"]>[1],
+  ): void {
+    this.exporter.export(metrics, resultCallback);
+  }
+
+  async forceFlush(): Promise<void> {
+    await this.exporter.forceFlush();
+  }
+
+  selectAggregationTemporality(
+    instrumentType: Parameters<NonNullable<PushMetricExporter["selectAggregationTemporality"]>>[0],
+  ): ReturnType<NonNullable<PushMetricExporter["selectAggregationTemporality"]>> {
+    return this.exporter.selectAggregationTemporality(instrumentType);
   }
 
   async shutdown(): Promise<void> {

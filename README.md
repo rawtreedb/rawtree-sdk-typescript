@@ -102,10 +102,11 @@ try {
 ```
 
 OpenTelemetry trace spans are sent to RawTree as OTLP JSON through
-`transform=otlp-traces`. RawTree stores one row per span in the `traces` table,
-with the original span fields plus merged resource attributes such as
-`service.name` and `scope.name`. Future log and metric exporters should follow
-the same signal naming convention with `logs` and `metrics` tables by default.
+`transform=otlp-traces`. Metrics are sent through `transform=otlp-metrics`.
+RawTree stores spans in the `traces` table and metric data points in the
+`metrics` table, with the original OTLP fields plus merged resource attributes
+such as `service.name` and `scope.name`. Future log support should follow the
+same signal naming convention with the `logs` table by default.
 
 The monitoring client is also available for manual events:
 
