@@ -70,6 +70,21 @@ describe("RawTree", () => {
     expect(fetchMock.mock.calls[0]?.[1]?.body).toBe(JSON.stringify({ sql: "SELECT 1" }));
   });
 
+  it("sends OTLP traces to the OTLP endpoint", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({}));
+    const rawtree = new RawTree({ apiKey: "rw_test", fetch: fetchMock });
+
+    await rawtree.sendOtlpTraces([{ type: "otel.span", source: "otel" }]);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.rawtree.com/otlp",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify([{ type: "otel.span", source: "otel" }]),
+      }),
+    );
+  });
+
   it("inserts a JSON object or array", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 2 }));
     const rawtree = new RawTree({
@@ -248,7 +263,7 @@ describe("RawTree", () => {
     }
 
     const rows = fetchMock.mock.calls.flatMap((call) => JSON.parse(call[1]?.body as string));
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.rawtree.com/v1/tables/traces");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.rawtree.com/otlp");
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       type: "otel.span",

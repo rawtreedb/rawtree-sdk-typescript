@@ -307,7 +307,11 @@ export class RawTreeMonitoringClient {
       const rows = this.eventQueue.splice(0, this.batch.size);
 
       try {
-        await this.rawtree.insert(this.table, rows);
+        if (this.table === "traces") {
+          await this.rawtree.sendOtlpTraces(rows);
+        } else {
+          await this.rawtree.insert(this.table, rows);
+        }
       } catch (error) {
         this.eventQueue.unshift(...rows);
         throw error;

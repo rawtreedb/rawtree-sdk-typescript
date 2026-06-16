@@ -40,6 +40,13 @@ export interface InsertResponse {
   inserted: number;
 }
 
+export interface OtlpTraceResponse {
+  partialSuccess?: {
+    rejectedSpans?: number;
+    errorMessage?: string;
+  };
+}
+
 export interface ColumnInfo {
   name: string;
   type: string;
@@ -179,6 +186,18 @@ export class RawTree {
     return this.request<InsertResponse>({
       method: "POST",
       path: `/v1/tables/${encodeURIComponent(table)}`,
+      body: rows,
+      ...options,
+    });
+  }
+
+  sendOtlpTraces<Row extends JsonObject = JsonObject>(
+    rows: Row | Row[],
+    options?: RequestOptions,
+  ): Promise<OtlpTraceResponse> {
+    return this.request<OtlpTraceResponse>({
+      method: "POST",
+      path: "/otlp",
       body: rows,
       ...options,
     });
