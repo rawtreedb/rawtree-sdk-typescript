@@ -38,6 +38,7 @@ function firstOtlpResource(fetchMock: ReturnType<typeof vi.fn>) {
 const DAYTONA_OTEL_ENV_KEYS = [
   "OTEL_EXPORTER_OTLP_PROTOCOL",
   "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+  "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
   "OTEL_EXPORTER_OTLP_HEADERS",
   "RAWTREE_API_KEY",
 ] as const;
@@ -466,6 +467,7 @@ describe("RawTree", () => {
         apiKey: "rw_test",
         baseUrl: "https://example.com/v1/",
         tracesTable: "daytona_traces",
+        metricsTable: "daytona_metrics",
         headers: {
           "x-extra": "two words",
         },
@@ -473,16 +475,21 @@ describe("RawTree", () => {
 
       expect(configuration).toMatchObject({
         endpoint: "https://example.com/otlp/v1/traces",
+        metricsEndpoint: "https://example.com/otlp/v1/metrics",
         tracesTable: "daytona_traces",
+        metricsTable: "daytona_metrics",
       });
       expect(process.env.OTEL_EXPORTER_OTLP_PROTOCOL).toBe("http/protobuf");
       expect(process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT)
         .toBe("https://example.com/otlp/v1/traces");
+      expect(process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT)
+        .toBe("https://example.com/otlp/v1/metrics");
       expect(parseOtlpHeaders(process.env.OTEL_EXPORTER_OTLP_HEADERS)).toMatchObject({
         "x-existing": "one",
         "x-extra": "two words",
         authorization: "Bearer rw_test",
         "x-rawtree-traces-table": "daytona_traces",
+        "x-rawtree-metrics-table": "daytona_metrics",
       });
       expect(configuration.headers).toBe(process.env.OTEL_EXPORTER_OTLP_HEADERS);
 
@@ -490,6 +497,7 @@ describe("RawTree", () => {
 
       expect(process.env.OTEL_EXPORTER_OTLP_PROTOCOL).toBeUndefined();
       expect(process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT).toBeUndefined();
+      expect(process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT).toBeUndefined();
       expect(process.env.OTEL_EXPORTER_OTLP_HEADERS).toBe("x-existing=one");
     } finally {
       restoreEnv(envSnapshot);
@@ -520,6 +528,8 @@ describe("RawTree", () => {
       expect(process.env.OTEL_EXPORTER_OTLP_PROTOCOL).toBe("http/protobuf");
       expect(process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT)
         .toBe("https://rawtree.internal/otlp/v1/traces");
+      expect(process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT)
+        .toBe("https://rawtree.internal/otlp/v1/metrics");
       expect(parseOtlpHeaders(process.env.OTEL_EXPORTER_OTLP_HEADERS)).toMatchObject({
         authorization: "Bearer rw_test",
         "x-rawtree-traces-table": "daytona_traces",
@@ -529,6 +539,7 @@ describe("RawTree", () => {
 
       expect(process.env.OTEL_EXPORTER_OTLP_PROTOCOL).toBeUndefined();
       expect(process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT).toBeUndefined();
+      expect(process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT).toBeUndefined();
       expect(process.env.OTEL_EXPORTER_OTLP_HEADERS).toBeUndefined();
     } finally {
       await otel?.shutdown().catch(() => undefined);

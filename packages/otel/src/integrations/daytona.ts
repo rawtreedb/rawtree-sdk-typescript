@@ -8,26 +8,32 @@ export interface RawTreeDaytonaIntegrationOptions {
   baseUrl?: string;
   endpoint?: string;
   tracesTable?: string;
+  metricsTable?: string;
   headers?: Record<string, string>;
 }
 
 export interface RawTreeDaytonaOtelConfiguration {
   endpoint: string;
+  metricsEndpoint: string;
   headers: string;
   tracesTable?: string;
+  metricsTable?: string;
   shutdown: () => void;
 }
 
 const DEFAULT_RAWTREE_BASE_URL = "https://api.rawtree.com";
 const OTLP_TRACES_PATH = "/otlp/v1/traces";
+const OTLP_METRICS_PATH = "/otlp/v1/metrics";
 const OTLP_PROTOCOL = "http/protobuf";
 const OTEL_EXPORTER_OTLP_PROTOCOL = "OTEL_EXPORTER_OTLP_PROTOCOL";
 const OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT";
+const OTEL_EXPORTER_OTLP_METRICS_ENDPOINT = "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT";
 const OTEL_EXPORTER_OTLP_HEADERS = "OTEL_EXPORTER_OTLP_HEADERS";
 
 const DAYTONA_OTEL_ENV_KEYS = [
   OTEL_EXPORTER_OTLP_PROTOCOL,
   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT,
+  OTEL_EXPORTER_OTLP_METRICS_ENDPOINT,
   OTEL_EXPORTER_OTLP_HEADERS,
 ] as const;
 
@@ -60,20 +66,25 @@ export function configureDaytonaOtel(
 
   const previousEnvironment = snapshotEnvironment(DAYTONA_OTEL_ENV_KEYS);
   const endpoint = getTracesEndpoint(options, context);
+  const metricsEndpoint = getMetricsEndpoint(options, context);
   const headers = getOtlpHeaders({
     apiKey,
     tracesTable: options.tracesTable,
+    metricsTable: options.metricsTable,
     headers: options.headers,
   });
 
   process.env[OTEL_EXPORTER_OTLP_PROTOCOL] = OTLP_PROTOCOL;
   process.env[OTEL_EXPORTER_OTLP_TRACES_ENDPOINT] = endpoint;
+  process.env[OTEL_EXPORTER_OTLP_METRICS_ENDPOINT] = metricsEndpoint;
   process.env[OTEL_EXPORTER_OTLP_HEADERS] = headers;
 
   return {
     endpoint,
+    metricsEndpoint,
     headers,
     tracesTable: options.tracesTable,
+    metricsTable: options.metricsTable,
     shutdown: () => {
       restoreEnvironment(previousEnvironment);
     },
@@ -83,6 +94,7 @@ export function configureDaytonaOtel(
 interface OtlpHeaderOptions {
   apiKey: string;
   tracesTable?: string;
+  metricsTable?: string;
   headers?: Record<string, string>;
 }
 
@@ -102,6 +114,13 @@ function getTracesEndpoint(
   return `${getRawTreeOtlpBaseUrl(options.baseUrl ?? context.baseUrl)}${OTLP_TRACES_PATH}`;
 }
 
+function getMetricsEndpoint(
+  options: RawTreeDaytonaIntegrationOptions,
+  context: RawTreeOtelIntegrationContext,
+): string {
+  return `${getRawTreeOtlpBaseUrl(options.baseUrl ?? context.baseUrl)}${OTLP_METRICS_PATH}`;
+}
+
 function getRawTreeOtlpBaseUrl(baseUrl = DEFAULT_RAWTREE_BASE_URL): string {
   return trimTrailingSlashes(baseUrl).replace(/\/v1$/, "");
 }
@@ -117,6 +136,10 @@ function getOtlpHeaders(options: OtlpHeaderOptions): string {
 
   if (options.tracesTable) {
     setOtlpHeader(entries, "x-rawtree-traces-table", options.tracesTable);
+  }
+
+  if (options.metricsTable) {
+    setOtlpHeader(entries, "x-rawtree-metrics-table", options.metricsTable);
   }
 
   return entries.map(({ key, value }) => `${key}=${value}`).join(",");

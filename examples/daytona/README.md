@@ -2,14 +2,15 @@
 
 This example sends Daytona SDK telemetry to RawTree.
 
-`registerOTel()` installs RawTree's OpenTelemetry setup, and
-`daytonaIntegration()` configures the OTLP environment variables that Daytona's
-own exporter reads when `otelEnabled: true` is enabled.
+`configureDaytonaOtel()` configures the OTLP environment variables that
+Daytona's own exporter reads when `otelEnabled: true` is enabled.
 
 It sends this signal to RawTree:
 
 - Daytona OTLP trace spans through RawTree's native `/otlp/v1/traces` endpoint,
   stored as one row per span in the `traces` table by default
+- Daytona OTLP metrics through RawTree's native `/otlp/v1/metrics` endpoint,
+  stored in the `metrics` table by default
 
 ## Run
 
@@ -33,7 +34,9 @@ Optional environment:
 export DAYTONA_API_URL=...
 export DAYTONA_TARGET=...
 export RAWTREE_DAYTONA_TRACES_TABLE=daytona_traces
+export RAWTREE_DAYTONA_METRICS_TABLE=daytona_metrics
 ```
 
 The example creates an ephemeral TypeScript sandbox, runs one command, deletes
-the sandbox, shuts down Daytona's OpenTelemetry SDK, and shuts down RawTree.
+the sandbox, shuts down Daytona's OpenTelemetry SDK, and restores the OTLP
+environment variables.
