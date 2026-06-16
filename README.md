@@ -7,8 +7,8 @@ TypeScript packages for building apps with RawTree.
 ## Packages
 
 - `@rawtree/sdk`: RawTree API client for query, insert, and table metadata.
-- `@rawtree/otel`: Sentry-style monitoring client, shared OpenTelemetry setup,
-  and optional AI SDK integration.
+- `@rawtree/otel`: OpenTelemetry setup, RawTree trace export, and optional AI
+  SDK integration.
 
 ## Install
 
@@ -107,7 +107,7 @@ with the original span fields plus merged resource attributes such as
 `service.name` and `scope.name`. Future log and metric exporters should follow
 the same signal naming convention with `logs` and `metrics` tables by default.
 
-The Sentry-style monitoring client is still available for manual events:
+The monitoring client is also available for manual events:
 
 ```ts
 import { initRawTree } from "@rawtree/otel";

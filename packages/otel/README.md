@@ -2,7 +2,8 @@
 
 OpenTelemetry monitoring integrations for RawTree.
 
-Use this package when you want a Sentry-style setup:
+Use this package to quickly register OpenTelemetry tracing and send spans to
+RawTree:
 
 ```ts
 import { registerOTel, aiSdkIntegration } from "@rawtree/otel";
