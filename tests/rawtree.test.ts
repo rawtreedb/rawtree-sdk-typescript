@@ -5,6 +5,7 @@ import { RawTree, RawTreeError, type QueryResponse } from "../packages/sdk/src/i
 import {
   aiSdkIntegration,
   initRawTree,
+  RawTreeTraceExporter,
   registerOTel,
   shutdownRawTreeTracerProvider,
 } from "../packages/otel/src/index.js";
@@ -330,6 +331,74 @@ describe("RawTree", () => {
     } finally {
       await shutdownRawTreeTracerProvider();
     }
+  });
+
+  it("does not close a shared exporter after a duplicate registration fails", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const exporter = new RawTreeTraceExporter({
+      apiKey: "rw_test",
+      fetch: fetchMock,
+    });
+    const otel = registerOTel({
+      serviceName: "api",
+      exporter,
+      spanProcessor: "simple",
+    });
+
+    try {
+      expect(() => registerOTel({
+        serviceName: "api",
+        exporter,
+        spanProcessor: "simple",
+      })).toThrow("already registered");
+
+      const span = trace
+        .getTracer("rawtree-register-otel-shared-exporter-test")
+        .startSpan("after failed duplicate registration");
+      span.end();
+
+      await otel.shutdown();
+    } finally {
+      await otel.shutdown().catch(() => undefined);
+    }
+
+    const rows = fetchMock.mock.calls.flatMap((call) => JSON.parse(call[1]?.body as string));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      type: "otel.span",
+      source: "otel",
+      payload: {
+        name: "after failed duplicate registration",
+      },
+    });
+  });
+
+  it("shuts down the provider when an integration teardown fails", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const otel = registerOTel({
+      serviceName: "api",
+      spanProcessor: "simple",
+      apiKey: "rw_test",
+      fetch: fetchMock,
+      integrations: [
+        {
+          name: "bad-teardown",
+          setupOtel: () => () => {
+            throw new Error("teardown failed");
+          },
+        },
+      ],
+    });
+
+    await expect(otel.shutdown()).rejects.toThrow("teardown failed");
+
+    const next = registerOTel({
+      serviceName: "api",
+      spanProcessor: "simple",
+      apiKey: "rw_test",
+      fetch: fetchMock,
+    });
+    await next.shutdown();
   });
 
   it("keeps registerOTel tracing alive when a monitoring integration closes", async () => {

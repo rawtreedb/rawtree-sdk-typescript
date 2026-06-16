@@ -98,7 +98,7 @@ export function registerOTel(options: RawTreeRegisterOtelOptions): RawTreeOtelHa
     }
   } catch (error) {
     cleanupIntegrationTeardowns(integrationTeardowns);
-    void shutdownRawTreeTracerProvider();
+    void shutdownRawTreeTracerProvider().catch(() => undefined);
     throw error;
   }
 
@@ -114,11 +114,30 @@ export function registerOTel(options: RawTreeRegisterOtelOptions): RawTreeOtelHa
 
       isShutdown = true;
 
-      for (const teardown of integrationTeardowns.splice(0)) {
-        await teardown();
+      let teardownError: unknown;
+
+      try {
+        await runIntegrationTeardowns(integrationTeardowns);
+      } catch (error) {
+        teardownError = error;
       }
 
-      await providerRegistration.shutdown();
+      try {
+        await providerRegistration.shutdown();
+      } catch (shutdownError) {
+        if (teardownError) {
+          throw new AggregateError(
+            [teardownError, shutdownError],
+            "RawTree OpenTelemetry shutdown failed.",
+          );
+        }
+
+        throw shutdownError;
+      }
+
+      if (teardownError) {
+        throw teardownError;
+      }
     },
   };
 }
@@ -214,7 +233,7 @@ function cleanupUnusedTelemetryObjects(
   exporterRegistration: ExporterRegistration,
   spanProcessorRegistration: SpanProcessorRegistration,
 ): void {
-  if (spanProcessorRegistration.ownsSpanProcessor) {
+  if (spanProcessorRegistration.ownsSpanProcessor && exporterRegistration.ownsExporter) {
     void spanProcessorRegistration.spanProcessor.shutdown().catch(() => undefined);
     return;
   }
@@ -227,5 +246,27 @@ function cleanupUnusedTelemetryObjects(
 function cleanupIntegrationTeardowns(teardowns: RawTreeIntegrationTeardown[]): void {
   for (const teardown of teardowns.splice(0)) {
     void Promise.resolve(teardown()).catch(() => undefined);
+  }
+}
+
+async function runIntegrationTeardowns(
+  teardowns: RawTreeIntegrationTeardown[],
+): Promise<void> {
+  const errors: unknown[] = [];
+
+  for (const teardown of teardowns.splice(0)) {
+    try {
+      await teardown();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+
+  if (errors.length === 1) {
+    throw errors[0];
+  }
+
+  if (errors.length > 1) {
+    throw new AggregateError(errors, "RawTree OpenTelemetry integration teardowns failed.");
   }
 }
