@@ -64,6 +64,13 @@ function firstOtlpMetricScopeFor(fetchMock: ReturnType<typeof vi.fn>, url: strin
   return otlpExportFor(fetchMock, url).resourceMetrics[0].scopeMetrics[0].scope;
 }
 
+function hasOtlpAttribute(
+  resource: { attributes?: Array<{ key?: string }> },
+  key: string,
+): boolean {
+  return resource.attributes?.some((attribute) => attribute.key === key) ?? false;
+}
+
 const DAYTONA_OTEL_ENV_KEYS = [
   "DAYTONA_OTEL_ENABLED",
   "DAYTONA_EXPERIMENTAL_OTEL_ENABLED",
@@ -553,6 +560,10 @@ describe("RawTree", () => {
           },
         ]),
       });
+      expect(hasOtlpAttribute(
+        firstOtlpResourceFor(fetchMock, tracesUrl),
+        "telemetry.sdk.name",
+      )).toBe(false);
       expect(firstOtlpMetricFor(fetchMock, metricsUrl)).toMatchObject({
         name: "daytona_create_duration",
         description: "Duration of Daytona.create calls.",
@@ -596,6 +607,10 @@ describe("RawTree", () => {
           },
         ]),
       });
+      expect(hasOtlpAttribute(
+        firstOtlpMetricResourceFor(fetchMock, metricsUrl),
+        "telemetry.sdk.name",
+      )).toBe(false);
     } finally {
       await otel?.shutdown().catch(() => undefined);
       restoreEnv(envSnapshot);

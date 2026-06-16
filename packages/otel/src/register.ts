@@ -354,12 +354,12 @@ function getResource(options: RawTreeRegisterOtelOptions): Resource {
       hostDetector,
     ],
   });
-  const resource = defaultResource().merge(detectedResource);
   const attributes = getResourceAttributes(options);
+  const resource = attributes
+    ? resourceFromAttributes(attributes)
+    : defaultResource();
 
-  return attributes
-    ? resource.merge(resourceFromAttributes(attributes))
-    : resource;
+  return resource.merge(detectedResource);
 }
 
 function getIntegrationContext(
