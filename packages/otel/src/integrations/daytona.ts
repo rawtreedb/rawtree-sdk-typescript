@@ -203,7 +203,10 @@ function getSiblingSignalEndpoint(endpoint: string, signal: "metrics"): string {
     return `${trimmedEndpoint.slice(0, -"/traces".length)}/${signal}`;
   }
 
-  return trimmedEndpoint;
+  throw new Error(
+    "RawTree Daytona integration requires metricsEndpoint when tracesEndpoint "
+      + "does not end with /traces.",
+  );
 }
 
 function snapshotEnvironment(

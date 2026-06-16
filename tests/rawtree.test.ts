@@ -530,6 +530,23 @@ describe("RawTree", () => {
     }
   });
 
+  it("requires a metrics endpoint when a custom Daytona traces endpoint cannot be derived", () => {
+    const envSnapshot = snapshotEnv(DAYTONA_OTEL_ENV_KEYS);
+
+    clearEnv(DAYTONA_OTEL_ENV_KEYS);
+
+    try {
+      expect(() => configureDaytonaOtel({
+        apiKey: "rw_test",
+        tracesEndpoint: "https://collector.example.com/custom-traces",
+      })).toThrow("metricsEndpoint");
+      expect(process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT).toBeUndefined();
+      expect(process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT).toBeUndefined();
+    } finally {
+      restoreEnv(envSnapshot);
+    }
+  });
+
   it("passes registerOTel connection settings to Daytona integration", async () => {
     const envSnapshot = snapshotEnv(DAYTONA_OTEL_ENV_KEYS);
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));

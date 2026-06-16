@@ -178,9 +178,9 @@ configureDaytonaOtel({
 });
 ```
 
-When `tracesEndpoint` is set and `metricsEndpoint` is omitted, RawTree derives
-the metrics endpoint by replacing the trailing `/traces` path segment with
-`/metrics`.
+When `tracesEndpoint` is set and `metricsEndpoint` is omitted, `tracesEndpoint`
+must end with `/traces`. RawTree derives the metrics endpoint by replacing that
+trailing segment with `/metrics`.
 
 Do not call `registerOTel()` solely for Daytona. Daytona starts its own
 OpenTelemetry SDK when `otelEnabled: true` is set, so the Daytona path should
