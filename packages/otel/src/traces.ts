@@ -3,7 +3,10 @@ import {
   type Attributes,
   type Context,
 } from "@opentelemetry/api";
-import { resourceFromAttributes } from "@opentelemetry/resources";
+import {
+  type Resource,
+  resourceFromAttributes,
+} from "@opentelemetry/resources";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import type {
   ReadableSpan,
@@ -22,6 +25,7 @@ export interface RawTreeOtelRegistrationOptions {
 
 export interface RawTreeTracerProviderRegistrationOptions extends RawTreeOtelRegistrationOptions {
   spanProcessors?: SpanProcessor[];
+  resource?: Resource;
   resourceAttributes?: Attributes;
 }
 
@@ -258,9 +262,9 @@ function ensureRawTreeTracerProvider(
   }
 
   const nextProvider = new NodeTracerProvider({
-    resource: options.resourceAttributes
+    resource: options.resource ?? (options.resourceAttributes
       ? resourceFromAttributes(options.resourceAttributes)
-      : undefined,
+      : undefined),
     spanProcessors: [...spanProcessors, processorHost],
   });
 

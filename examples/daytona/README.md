@@ -2,13 +2,16 @@
 
 This example sends Daytona SDK telemetry to RawTree.
 
-`registerOTel()` installs RawTree as the process OpenTelemetry exporter, and
-`daytonaIntegration()` lets Daytona SDK spans flow through that same setup.
+`registerOTel()` installs RawTree as the process OpenTelemetry trace and metric
+exporter, and `daytonaIntegration()` lets Daytona SDK telemetry flow through
+that same setup.
 
 It sends this signal to RawTree:
 
 - Daytona SDK trace spans through RawTree's `otlp-traces` transform, stored as
   one row per span in the `traces` table by default
+- Daytona SDK duration histograms through RawTree's `otlp-metrics` transform,
+  stored as one row per metric data point in the `metrics` table by default
 
 ## Run
 
@@ -37,4 +40,4 @@ Do not pass `otelEnabled: true` to Daytona in this example. RawTree owns the
 OpenTelemetry provider.
 
 The example creates an ephemeral TypeScript sandbox, runs one command, deletes
-the sandbox, then shuts down Daytona and RawTree so spans flush.
+the sandbox, then shuts down Daytona and RawTree so spans and metrics flush.

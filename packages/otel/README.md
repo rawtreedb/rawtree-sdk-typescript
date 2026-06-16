@@ -2,8 +2,8 @@
 
 OpenTelemetry monitoring integrations for RawTree.
 
-Use this package to quickly register OpenTelemetry tracing and send spans to
-RawTree:
+Use this package to quickly register OpenTelemetry tracing and metrics and send
+them to RawTree:
 
 ```ts
 import { registerOTel, aiSdkIntegration } from "@rawtree/otel";
@@ -17,9 +17,9 @@ const rawtree = registerOTel({
 });
 ```
 
-RawTree is installed as the OpenTelemetry span exporter. Integrations enable
-tool-specific telemetry, and RawTree ingests the resulting unstructured spans so
-you can query them later.
+RawTree is installed as the OpenTelemetry trace and metric exporter.
+Integrations enable tool-specific telemetry, and RawTree ingests the resulting
+unstructured OTLP payloads so you can query them later.
 
 ## Install
 
@@ -135,7 +135,8 @@ See `examples/ai-sdk` in this repository for a runnable harness agent example.
 RawTree does not import Daytona or wrap the Daytona client. Register RawTree
 once when your process starts and add `daytonaIntegration()` with your other
 integrations. Daytona SDK spans are exported by the RawTree OpenTelemetry
-provider.
+provider. Daytona SDK duration histograms are exported by the RawTree
+OpenTelemetry meter provider.
 
 ```ts
 import { Daytona } from "@daytona/sdk";
@@ -171,7 +172,10 @@ See `examples/daytona` in this repository for a runnable Daytona example.
 ## What RawTree Receives
 
 `registerOTel()` sends OpenTelemetry trace spans to the `traces` table by
-default using RawTree's `otlp-traces` transform. The exporter posts OTLP JSON to:
+default using RawTree's `otlp-traces` transform. It sends OpenTelemetry metrics
+to the `metrics` table by default using RawTree's `otlp-metrics` transform.
+
+The trace exporter posts OTLP JSON to:
 
 ```text
 /v1/tables/traces?transform=otlp-traces
@@ -186,8 +190,17 @@ the source scope has a name.
 `serviceName` is stored as the standard OpenTelemetry resource attribute
 `service.name`.
 
-The package currently exports traces. Future logs and metrics support should
-use the default RawTree tables `logs` and `metrics`.
+The metric exporter posts OTLP JSON to:
+
+```text
+/v1/tables/metrics?transform=otlp-metrics
+```
+
+RawTree stores one row per metric data point. Daytona currently emits duration
+histograms for decorated SDK methods, with attributes such as `component`,
+`method`, and `status`.
+
+Future logs support should use the default RawTree table `logs`.
 
 ## Process Setup
 
@@ -195,7 +208,8 @@ Call `registerOTel()` once during process startup, before the libraries you want
 to monitor start doing work.
 
 For scripts and tests, call `await rawtree.shutdown()` before exit so buffered
-spans are flushed. For servers and workers, call it from your shutdown path:
+spans and metrics are flushed. For servers and workers, call it from your
+shutdown path:
 
 ```ts
 const rawtree = registerOTel({
@@ -213,21 +227,29 @@ process.on("SIGTERM", () => {
 
 ## Existing OpenTelemetry Setup
 
-`registerOTel()` registers a tracer provider for you. If your app already owns
-OpenTelemetry provider setup, use `RawTreeTraceExporter` with your existing span
-processor setup instead.
+`registerOTel()` registers a tracer provider and meter provider for you. If your
+app already owns OpenTelemetry provider setup, use `RawTreeTraceExporter` and
+`RawTreeMetricExporter` with your existing processor and reader setup instead.
 
 ```ts
+import { PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
 import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
-import { RawTreeTraceExporter } from "@rawtree/otel/exporter";
+import { RawTreeMetricExporter, RawTreeTraceExporter } from "@rawtree/otel/exporter";
 
-const exporter = new RawTreeTraceExporter({
+const traceExporter = new RawTreeTraceExporter({
   apiKey: process.env.RAWTREE_API_KEY!,
 });
 
-const spanProcessor = new BatchSpanProcessor(exporter);
+const metricExporter = new RawTreeMetricExporter({
+  apiKey: process.env.RAWTREE_API_KEY!,
+});
 
-// Add spanProcessor to the tracer provider your app already creates.
+const spanProcessor = new BatchSpanProcessor(traceExporter);
+const metricReader = new PeriodicExportingMetricReader({
+  exporter: metricExporter,
+});
+
+// Add spanProcessor and metricReader to the providers your app already creates.
 ```
 
 If you already register the AI SDK OpenTelemetry bridge yourself, disable
@@ -253,6 +275,10 @@ registerOTel({
   integrations?: RawTreeIntegration[];
   spanProcessor?: "batch" | "simple" | SpanProcessor;
   batchSpanProcessorOptions?: BufferConfig;
+  metrics?: boolean;
+  metricExporter?: RawTreeMetricExporter;
+  metricReader?: "periodic" | MetricReader;
+  metricReaderOptions?: Omit<PeriodicExportingMetricReaderOptions, "exporter">;
   forceRegisterProvider?: boolean;
   unregisterOnShutdown?: boolean;
 });
@@ -263,10 +289,16 @@ Returns:
 ```ts
 {
   exporter: RawTreeTraceExporter;
+  metricExporter?: RawTreeMetricExporter;
   providerRegistered: boolean;
+  meterProviderRegistered: boolean;
   shutdown: () => Promise<void>;
 }
 ```
+
+Metrics are enabled by default when `registerOTel()` owns the RawTree API
+connection. Pass `metrics: false` if your app already has a meter provider and
+you only want RawTree to register traces.
 
 ### aiSdkIntegration
 
@@ -300,6 +332,20 @@ new RawTreeTraceExporter({
 });
 ```
 
+### RawTreeMetricExporter
+
+Use this when you want to wire RawTree metrics into an existing OpenTelemetry
+setup instead of calling `registerOTel()`.
+
+```ts
+new RawTreeMetricExporter({
+  apiKey: string;
+  baseUrl?: string;
+  fetch?: typeof fetch;
+  table?: string;
+});
+```
+
 ## Imports
 
 ```ts
@@ -315,9 +361,13 @@ import { daytonaIntegration } from "@rawtree/otel/daytona";
 ```
 
 ```ts
-import { RawTreeTraceExporter } from "@rawtree/otel/exporter";
+import { RawTreeMetricExporter, RawTreeTraceExporter } from "@rawtree/otel/exporter";
 ```
 
 ```ts
 import { registerOTel } from "@rawtree/otel/register";
+```
+
+```ts
+import { registerRawTreeMeterProvider } from "@rawtree/otel/metrics";
 ```

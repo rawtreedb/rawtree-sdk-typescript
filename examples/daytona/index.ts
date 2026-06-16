@@ -32,15 +32,10 @@ let sandbox: Awaited<ReturnType<typeof daytona.create>> | undefined;
 try {
   sandbox = await daytona.create({
     language: "typescript",
-    ephemeral: true,
-    autoStopInterval: 5,
-    labels: {
-      example: "rawtree-daytona",
-    },
   });
 
-  const response = await sandbox.process.executeCommand(
-    'node -e "console.log(JSON.stringify({ ok: true, source: \\"daytona\\" }))"',
+  const response = await sandbox.process.codeRun(
+    'console.log("Hello World from Daytona!")',
   );
 
   console.log(response.result);
