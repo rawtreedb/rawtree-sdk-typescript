@@ -1,0 +1,19 @@
+{
+  "name": "daytona",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "npm --prefix ../.. run build && node --env-file-if-exists=.env.local --import tsx index.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@daytona/sdk": "0.187.0",
+    "@rawtree/otel": "file:../../packages/otel",
+    "@rawtree/sdk": "file:../../packages/sdk",
+    "tsx": "^4.20.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "typescript": "^5.9.3"
+  }
+}

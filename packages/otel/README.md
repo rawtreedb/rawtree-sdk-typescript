@@ -138,13 +138,12 @@ environment variables that Daytona reads when you enable its telemetry.
 
 ```ts
 import { Daytona } from "@daytona/sdk";
-import { registerOTel, aiSdkIntegration, daytonaIntegration } from "@rawtree/otel";
+import { registerOTel, daytonaIntegration } from "@rawtree/otel";
 
 const rawtree = registerOTel({
   apiKey: process.env.RAWTREE_API_KEY!,
   serviceName: "agent-api",
   integrations: [
-    aiSdkIntegration(),
     daytonaIntegration(),
   ],
 });
@@ -193,6 +192,8 @@ try {
   daytonaOtel.shutdown();
 }
 ```
+
+See `examples/daytona` in this repository for a runnable Daytona example.
 
 ## What RawTree Receives
 
