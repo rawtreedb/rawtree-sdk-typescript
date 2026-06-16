@@ -2,6 +2,8 @@ import {
   BatchSpanProcessor,
   SimpleSpanProcessor,
   type BufferConfig,
+  type ReadableSpan,
+  type SpanExporter,
   type SpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
 import type { Attributes } from "@opentelemetry/api";
@@ -48,7 +50,7 @@ export interface RawTreeOtelHandle {
 export function registerOTel(options: RawTreeRegisterOtelOptions): RawTreeOtelHandle {
   const exporterRegistration = toExporter(options);
   const exporter = exporterRegistration.exporter;
-  const spanProcessorRegistration = toSpanProcessor(options, exporter);
+  const spanProcessorRegistration = toSpanProcessor(options, exporterRegistration);
   const spanProcessor = spanProcessorRegistration.spanProcessor;
   let providerRegistration: ReturnType<typeof registerRawTreeTracerProvider>;
 
@@ -200,7 +202,7 @@ function hasCustomExporter(
 
 function toSpanProcessor(
   options: RawTreeRegisterOtelOptions,
-  exporter: RawTreeTraceExporter,
+  exporterRegistration: ExporterRegistration,
 ): SpanProcessorRegistration {
   if (typeof options.spanProcessor === "object") {
     return {
@@ -209,15 +211,19 @@ function toSpanProcessor(
     };
   }
 
+  const spanExporter = exporterRegistration.ownsExporter
+    ? exporterRegistration.exporter
+    : new NonClosingSpanExporter(exporterRegistration.exporter);
+
   if (options.spanProcessor === "simple") {
     return {
-      spanProcessor: new SimpleSpanProcessor(exporter),
+      spanProcessor: new SimpleSpanProcessor(spanExporter),
       ownsSpanProcessor: true,
     };
   }
 
   return {
-    spanProcessor: new BatchSpanProcessor(exporter, options.batchSpanProcessorOptions),
+    spanProcessor: new BatchSpanProcessor(spanExporter, options.batchSpanProcessorOptions),
     ownsSpanProcessor: true,
   };
 }
@@ -233,13 +239,32 @@ function cleanupUnusedTelemetryObjects(
   exporterRegistration: ExporterRegistration,
   spanProcessorRegistration: SpanProcessorRegistration,
 ): void {
-  if (spanProcessorRegistration.ownsSpanProcessor && exporterRegistration.ownsExporter) {
+  if (spanProcessorRegistration.ownsSpanProcessor) {
     void spanProcessorRegistration.spanProcessor.shutdown().catch(() => undefined);
     return;
   }
 
   if (exporterRegistration.ownsExporter) {
     void exporterRegistration.exporter.shutdown().catch(() => undefined);
+  }
+}
+
+class NonClosingSpanExporter implements SpanExporter {
+  constructor(private readonly exporter: RawTreeTraceExporter) {}
+
+  export(
+    spans: ReadableSpan[],
+    resultCallback: Parameters<SpanExporter["export"]>[1],
+  ): void {
+    this.exporter.export(spans, resultCallback);
+  }
+
+  async forceFlush(): Promise<void> {
+    await this.exporter.forceFlush();
+  }
+
+  async shutdown(): Promise<void> {
+    await this.exporter.forceFlush();
   }
 }
 
