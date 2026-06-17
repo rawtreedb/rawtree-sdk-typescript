@@ -1,0 +1,5 @@
+.env*
+.eve
+.workflow-data
+.output
+node_modules
