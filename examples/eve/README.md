@@ -16,7 +16,6 @@ export default defineInstrumentation({
     registerOTel({
       apiKey: process.env.RAWTREE_API_KEY!,
       serviceName: agentName,
-      spanProcessor: "simple",
     });
   },
   recordInputs: true,

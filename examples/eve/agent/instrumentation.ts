@@ -13,7 +13,6 @@ export default defineInstrumentation({
       apiKey: rawtreeApiKey,
       serviceName: agentName,
       environment: process.env.NODE_ENV ?? "development",
-      spanProcessor: "simple",
     });
   },
   recordInputs: true,
