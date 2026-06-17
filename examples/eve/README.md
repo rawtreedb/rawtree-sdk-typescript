@@ -37,6 +37,9 @@ npm run dev
 
 Eve loads `.env` and `.env.local` from the example root.
 
+Because this example links to the local workspace packages, the local scripts
+build the RawTree packages before starting Eve or typechecking.
+
 Required environment:
 
 ```sh
