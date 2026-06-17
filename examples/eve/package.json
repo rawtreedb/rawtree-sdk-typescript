@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "npm --prefix ../.. run build && node --env-file-if-exists=.env.local --import tsx run.ts",
+    "dev": "eve dev",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
@@ -11,7 +11,7 @@
     "@rawtree/sdk": "file:../../packages/sdk",
     "ai": "7.0.0-beta.178",
     "eve": "0.11.1",
-    "tsx": "^4.20.6"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^25.9.3",

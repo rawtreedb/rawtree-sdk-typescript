@@ -3,8 +3,8 @@
 This example sends Eve agent OpenTelemetry spans to RawTree using Eve's public
 `agent/instrumentation.ts` API and RawTree's `registerOTel()`.
 
-Eve owns the AI SDK telemetry setup. The example only registers RawTree as the
-process OpenTelemetry exporter:
+Eve owns the AI SDK telemetry setup. This example only registers RawTree as the
+OpenTelemetry exporter:
 
 ```ts
 // agent/instrumentation.ts
@@ -32,10 +32,10 @@ as `workflow.start` and `workflow.run` under this example's service name.
 
 ```sh
 npm install
-npm run start
+npm run dev
 ```
 
-`npm run start` loads `.env.local` when present.
+Eve loads `.env` and `.env.local` from the example root.
 
 Required environment:
 
@@ -44,14 +44,28 @@ export RAWTREE_API_KEY=...
 export AI_GATEWAY_API_KEY=...
 ```
 
-For local compatibility with the other examples, the runner also accepts
-`VERCEL_AI_GATEWAY_API_KEY` and forwards it to Eve as `AI_GATEWAY_API_KEY`.
+You can also use `VERCEL_OIDC_TOKEN` for AI Gateway auth if you pulled it with
+`eve link` or `vercel link`.
 
 Optional environment:
 
 ```sh
-export EVE_MODEL=openai/gpt-5-mini
+export EVE_MODEL=anthropic/claude-sonnet-4.6
 ```
 
-The example starts `eve dev --no-ui`, sends one prompt through `eve/client`,
-prints the final response, and stops the local Eve server.
+In another terminal, create a session with Eve's built-in HTTP API:
+
+```sh
+curl -X POST http://127.0.0.1:3000/eve/v1/session \
+  -H 'content-type: application/json' \
+  -d '{"message":"Say hello from RawTree in one short sentence."}'
+```
+
+Then attach to the session stream with the `x-eve-session-id` response header:
+
+```sh
+curl http://127.0.0.1:3000/eve/v1/session/<sessionId>/stream
+```
+
+After the run completes, query RawTree's `traces` table for
+`service.name = 'rawtree-eve-example'`.
