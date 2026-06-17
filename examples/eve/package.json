@@ -1,0 +1,20 @@
+{
+  "name": "rawtree-eve-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "npm --prefix ../.. run build && node --env-file-if-exists=.env.local --import tsx run.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@rawtree/otel": "file:../../packages/otel",
+    "@rawtree/sdk": "file:../../packages/sdk",
+    "ai": "7.0.0-beta.178",
+    "eve": "0.11.1",
+    "tsx": "^4.20.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "typescript": "^5.9.3"
+  }
+}
