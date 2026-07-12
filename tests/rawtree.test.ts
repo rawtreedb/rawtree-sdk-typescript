@@ -91,6 +91,23 @@ describe("RawTree", () => {
     expect(headers).toBeInstanceOf(Headers);
     expect((headers as Headers).get("Authorization")).toBe("Bearer rw_test");
     expect((headers as Headers).get("Content-Type")).toBe("application/json");
+    expect((headers as Headers).get("User-Agent")).toBe("rawtree-sdk-typescript/0.1.0");
+  });
+
+  it("supports overriding the user agent", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({ meta: [], data: [], rows: 0, statistics: {} }),
+    );
+    const rawtree = new RawTree({
+      apiKey: "rw_test",
+      fetch: fetchMock,
+      userAgent: "my-service/1.0.0",
+    });
+
+    await rawtree.query("SELECT 1");
+
+    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers;
+    expect(headers.get("User-Agent")).toBe("my-service/1.0.0");
   });
 
   it("accepts query request objects", async () => {

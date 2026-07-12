@@ -1,3 +1,5 @@
+import packageJson from "../package.json" with { type: "json" };
+
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
 export type JsonObject = { [key: string]: JsonValue };
@@ -6,6 +8,7 @@ export interface RawTreeOptions {
   apiKey: string;
   baseUrl?: string;
   fetch?: typeof fetch;
+  userAgent?: string;
 }
 
 export interface RequestOptions {
@@ -93,6 +96,7 @@ interface RequestConfig extends RequestOptions {
 }
 
 const DEFAULT_BASE_URL = "https://api.rawtree.com";
+const DEFAULT_USER_AGENT = `rawtree-sdk-typescript/${packageJson.version}`;
 
 export class RawTreeError extends Error {
   readonly status: number;
@@ -132,6 +136,7 @@ export class RawTree {
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly userAgent: string;
 
   constructor(options: RawTreeOptions) {
     if (!options || typeof options.apiKey !== "string" || options.apiKey.trim() === "") {
@@ -147,6 +152,7 @@ export class RawTree {
     this.apiKey = options.apiKey;
     this.baseUrl = normalizeBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL);
     this.fetchImpl = fetchImpl;
+    this.userAgent = options.userAgent ?? DEFAULT_USER_AGENT;
     this.tables = {
       list: (requestOptions) => this.request<TablesResponse>({
         method: "GET",
@@ -211,6 +217,10 @@ export class RawTree {
   private buildHeaders(config: RequestConfig): Headers {
     const headers = new Headers(config.headers);
     headers.set("Authorization", `Bearer ${this.apiKey}`);
+
+    if (!headers.has("User-Agent")) {
+      headers.set("User-Agent", this.userAgent);
+    }
 
     if (config.body !== undefined && !headers.has("Content-Type")) {
       headers.set("Content-Type", "application/json");
