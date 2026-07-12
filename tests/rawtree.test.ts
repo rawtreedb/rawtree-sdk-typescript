@@ -91,7 +91,7 @@ describe("RawTree", () => {
     expect(headers).toBeInstanceOf(Headers);
     expect((headers as Headers).get("Authorization")).toBe("Bearer rw_test");
     expect((headers as Headers).get("Content-Type")).toBe("application/json");
-    expect((headers as Headers).get("User-Agent")).toBe("rawtree-sdk-typescript/0.1.0");
+    expect((headers as Headers).get("User-Agent")).toBe("rawtree-sdk-typescript/0.1.1");
   });
 
   it("supports overriding the user agent", async () => {
