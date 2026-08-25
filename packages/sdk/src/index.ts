@@ -6,22 +6,30 @@ export type JsonObject = { [key: string]: JsonValue };
 
 export interface RawTreeOptions {
   apiKey: string;
+  database?: string;
   baseUrl?: string;
   fetch?: typeof fetch;
   userAgent?: string;
 }
 
 export interface RequestOptions {
+  database?: string;
   signal?: AbortSignal;
   headers?: HeadersInit;
 }
 
-export interface InsertOptions extends RequestOptions {
+export interface QueryParams extends RequestOptions {
+  sql: string;
+}
+
+export interface InsertParams<Row extends JsonObject = JsonObject> extends RequestOptions {
+  table: string;
+  values: Row | Row[];
   transform?: string;
 }
 
-export interface QueryRequest {
-  sql: string;
+export interface DescribeTableParams extends RequestOptions {
+  table: string;
 }
 
 export interface QueryResponseColumnMeta {
@@ -127,13 +135,11 @@ export class RawTreeError extends Error {
 export class RawTree {
   readonly tables: {
     list: (options?: RequestOptions) => Promise<TablesResponse>;
-    describe: (
-      table: string,
-      options?: RequestOptions,
-    ) => Promise<DescribeTableResponse>;
+    describe: (params: DescribeTableParams) => Promise<DescribeTableResponse>;
   };
 
   private readonly apiKey: string;
+  private readonly database?: string;
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
   private readonly userAgent: string;
@@ -150,6 +156,7 @@ export class RawTree {
     }
 
     this.apiKey = options.apiKey;
+    this.database = normalizeDatabase(options.database);
     this.baseUrl = normalizeBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL);
     this.fetchImpl = fetchImpl;
     this.userAgent = options.userAgent ?? DEFAULT_USER_AGENT;
@@ -159,34 +166,30 @@ export class RawTree {
         path: "/v1/tables",
         ...requestOptions,
       }),
-      describe: (table, requestOptions) => this.request<DescribeTableResponse>({
-        method: "GET",
-        path: `/v1/tables/${encodeURIComponent(table)}`,
-        ...requestOptions,
-      }),
+      describe: ({ table, ...requestOptions }) =>
+        this.request<DescribeTableResponse>({
+          method: "GET",
+          path: `/v1/tables/${encodeURIComponent(table)}`,
+          ...requestOptions,
+        }),
     };
   }
 
-  query<Row = unknown>(
-    sql: string | QueryRequest,
-    options?: RequestOptions,
-  ): Promise<QueryResponse<Row>> {
-    const body = typeof sql === "string" ? { sql } : sql;
-
+  query<Row = unknown>({ sql, ...requestOptions }: QueryParams): Promise<QueryResponse<Row>> {
     return this.request<QueryResponse<Row>>({
       method: "POST",
       path: "/v1/query",
-      body,
-      ...options,
+      body: { sql },
+      ...requestOptions,
     });
   }
 
-  insert<Row extends JsonObject = JsonObject>(
-    table: string,
-    rows: Row | Row[],
-    options?: InsertOptions,
-  ): Promise<InsertResponse> {
-    const { transform, ...requestOptions } = options ?? {};
+  insert<Row extends JsonObject = JsonObject>({
+    table,
+    values,
+    transform,
+    ...requestOptions
+  }: InsertParams<Row>): Promise<InsertResponse> {
     const query = transform
       ? `?transform=${encodeURIComponent(transform)}`
       : "";
@@ -194,7 +197,7 @@ export class RawTree {
     return this.request<InsertResponse>({
       method: "POST",
       path: `/v1/tables/${encodeURIComponent(table)}${query}`,
-      body: rows,
+      body: values,
       ...requestOptions,
     });
   }
@@ -217,6 +220,14 @@ export class RawTree {
   private buildHeaders(config: RequestConfig): Headers {
     const headers = new Headers(config.headers);
     headers.set("Authorization", `Bearer ${this.apiKey}`);
+
+    const database = config.database ?? this.database;
+    if (database !== undefined) {
+      const normalizedDatabase = normalizeDatabase(database);
+      if (normalizedDatabase !== undefined) {
+        headers.set("x-rawtree-database", normalizedDatabase);
+      }
+    }
 
     if (!headers.has("User-Agent")) {
       headers.set("User-Agent", this.userAgent);
@@ -246,4 +257,17 @@ async function readErrorBody(response: Response): Promise<Partial<ErrorResponse>
 
 function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, "");
+}
+
+function normalizeDatabase(database: string | undefined): string | undefined {
+  if (database === undefined) {
+    return undefined;
+  }
+
+  const normalized = database.trim();
+  if (normalized === "") {
+    throw new TypeError("RawTree database must be a non-empty string.");
+  }
+
+  return normalized;
 }
