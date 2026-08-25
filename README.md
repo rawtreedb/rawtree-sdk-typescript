@@ -25,16 +25,19 @@ const rawtree = new RawTree({
   apiKey: process.env.RAWTREE_API_KEY!,
 });
 
-await rawtree.insert("events", [
-  { event: "signup", user_id: "u_123" },
-]);
+await rawtree.insert({
+  table: "events",
+  values: [
+    { event: "signup", user_id: "u_123" },
+  ],
+});
 
-const result = await rawtree.query<{ event: string; count: number }>(
-  "SELECT event, count() AS count FROM events GROUP BY event"
-);
+const result = await rawtree.query<{ event: string; count: number }>({
+  sql: "SELECT event, count() AS count FROM events GROUP BY event",
+});
 
 const tables = await rawtree.tables.list();
-const schema = await rawtree.tables.describe("events");
+const schema = await rawtree.tables.describe({ table: "events" });
 ```
 
 ## Monitoring
@@ -137,38 +140,47 @@ credentials your Claude Code and Vercel Sandbox setup require.
 ```ts
 new RawTree({
   apiKey: string;
+  database?: string;
   baseUrl?: string;
   fetch?: typeof fetch;
 });
 ```
 
 The SDK sends the API key as `Authorization: Bearer <apiKey>`.
+Set `database` on the client for a default database, or override it on an
+individual request. The SDK appends the selected database as the
+`?database=<name>` query parameter.
 
 ### query
 
 ```ts
-rawtree.query<Row = unknown>(
-  sql: string | { sql: string },
-  options?: RequestOptions,
-): Promise<QueryResponse<Row>>;
+rawtree.query<Row = unknown>(params: QueryParams): Promise<QueryResponse<Row>>;
+
+interface QueryParams extends RequestOptions {
+  sql: string;
+}
 ```
 
 ### insert
 
 ```ts
 rawtree.insert<Row extends JsonObject = JsonObject>(
-  table: string,
-  rows: Row | Row[],
-  options?: InsertOptions,
+  params: InsertParams<Row>,
 ): Promise<InsertResponse>;
+
+interface InsertParams<Row extends JsonObject = JsonObject> extends RequestOptions {
+  table: string;
+  values: Row | Row[];
+  transform?: string;
+}
 ```
 
-`InsertOptions.transform` can be used with built-in RawTree transforms such as
+`InsertParams.transform` can be used with built-in RawTree transforms such as
 `otlp-traces`, `otlp-logs`, and `otlp-metrics`.
 
 ### tables
 
 ```ts
 rawtree.tables.list(options?: RequestOptions): Promise<TablesResponse>;
-rawtree.tables.describe(table: string, options?: RequestOptions): Promise<DescribeTableResponse>;
+rawtree.tables.describe(params: DescribeTableParams): Promise<DescribeTableResponse>;
 ```

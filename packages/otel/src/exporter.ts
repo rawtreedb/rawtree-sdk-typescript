@@ -79,7 +79,9 @@ export class RawTreeTraceExporter implements SpanExporter {
       return;
     }
 
-    await this.rawtree.insert(this.table, toOtlpTraceExport(spans), {
+    await this.rawtree.insert({
+      table: this.table,
+      values: toOtlpTraceExport(spans),
       transform: OTLP_TRACES_TRANSFORM,
     });
   }

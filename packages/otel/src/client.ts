@@ -311,7 +311,10 @@ export class RawTreeMonitoringClient {
       const rows = this.eventQueue.splice(0, this.batch.size);
 
       try {
-        await this.rawtree.insert(this.table, rows);
+        await this.rawtree.insert({
+          table: this.table,
+          values: rows,
+        });
       } catch (error) {
         this.eventQueue.unshift(...rows);
         throw error;

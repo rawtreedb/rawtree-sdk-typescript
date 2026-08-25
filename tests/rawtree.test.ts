@@ -76,7 +76,9 @@ describe("RawTree", () => {
     );
     const rawtree = new RawTree({ apiKey: "rw_test", fetch: fetchMock });
 
-    const result = await rawtree.query<{ event: string }>("SELECT event FROM events");
+    const result = await rawtree.query<{ event: string }>({
+      sql: "SELECT event FROM events",
+    });
 
     expect(result.data[0]?.event).toBe("signup");
     expect(fetchMock).toHaveBeenCalledWith(
@@ -91,7 +93,37 @@ describe("RawTree", () => {
     expect(headers).toBeInstanceOf(Headers);
     expect((headers as Headers).get("Authorization")).toBe("Bearer rw_test");
     expect((headers as Headers).get("Content-Type")).toBe("application/json");
-    expect((headers as Headers).get("User-Agent")).toBe("rawtree-sdk-typescript/0.1.1");
+    expect((headers as Headers).get("User-Agent")).toBe("rawtree-sdk-typescript/0.2.0");
+    expect((headers as Headers).get("x-rawtree-database")).toBeNull();
+  });
+
+  it("uses the client database unless a request overrides it", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () =>
+      jsonResponse({ meta: [], data: [], rows: 0, statistics: {} }),
+    );
+    const rawtree = new RawTree({
+      apiKey: "rw_test",
+      database: "analytics",
+      fetch: fetchMock,
+    });
+
+    await rawtree.query({ sql: "SELECT 1" });
+    await rawtree.insert({
+      table: "events",
+      values: { event: "signup" },
+      database: "staging",
+    });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://api.rawtree.com/v1/query?database=analytics",
+    );
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      "https://api.rawtree.com/v1/tables/events?database=staging",
+    );
+    const queryHeaders = fetchMock.mock.calls[0]?.[1]?.headers as Headers;
+    const insertHeaders = fetchMock.mock.calls[1]?.[1]?.headers as Headers;
+    expect(queryHeaders.get("x-rawtree-database")).toBeNull();
+    expect(insertHeaders.get("x-rawtree-database")).toBeNull();
   });
 
   it("supports overriding the user agent", async () => {
@@ -104,13 +136,13 @@ describe("RawTree", () => {
       userAgent: "my-service/1.0.0",
     });
 
-    await rawtree.query("SELECT 1");
+    await rawtree.query({ sql: "SELECT 1" });
 
     const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers;
     expect(headers.get("User-Agent")).toBe("my-service/1.0.0");
   });
 
-  it("accepts query request objects", async () => {
+  it("accepts named query params", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       jsonResponse({
         meta: [],
@@ -134,7 +166,10 @@ describe("RawTree", () => {
       fetch: fetchMock,
     });
 
-    await expect(rawtree.insert("events", [{ event: "signup" }, { event: "purchase" }]))
+    await expect(rawtree.insert({
+      table: "events",
+      values: [{ event: "signup" }, { event: "purchase" }],
+    }))
       .resolves.toEqual({ inserted: 2 });
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -154,12 +189,15 @@ describe("RawTree", () => {
       fetch: fetchMock,
     });
 
-    await rawtree.insert("traces", { resourceSpans: [] }, {
+    await rawtree.insert({
+      table: "traces",
+      values: { resourceSpans: [] },
       transform: "otlp-traces",
+      database: "analytics",
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://example.com/v1/tables/traces?transform=otlp-traces",
+      "https://example.com/v1/tables/traces?transform=otlp-traces&database=analytics",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ resourceSpans: [] }),
@@ -200,7 +238,7 @@ describe("RawTree", () => {
     );
     const rawtree = new RawTree({ apiKey: "rw_test", fetch: fetchMock });
 
-    await rawtree.tables.describe("user events");
+    await rawtree.tables.describe({ table: "user events" });
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
       "https://api.rawtree.com/v1/tables/user%20events",
@@ -212,7 +250,9 @@ describe("RawTree", () => {
     const rawtree = new RawTree({ apiKey: "rw_test", fetch: fetchMock });
     const abortController = new AbortController();
 
-    await rawtree.insert("events", { event: "signup" }, {
+    await rawtree.insert({
+      table: "events",
+      values: { event: "signup" },
       signal: abortController.signal,
       headers: { "X-Test": "yes" },
     });
@@ -232,7 +272,7 @@ describe("RawTree", () => {
     );
     const rawtree = new RawTree({ apiKey: "rw_test", fetch: fetchMock });
 
-    await expect(rawtree.query("DROP TABLE events")).rejects.toMatchObject({
+    await expect(rawtree.query({ sql: "DROP TABLE events" })).rejects.toMatchObject({
       name: "RawTreeError",
       status: 400,
       error: "bad_request",
