@@ -114,10 +114,16 @@ describe("RawTree", () => {
       database: "staging",
     });
 
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://api.rawtree.com/v1/query?database=analytics",
+    );
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      "https://api.rawtree.com/v1/tables/events?database=staging",
+    );
     const queryHeaders = fetchMock.mock.calls[0]?.[1]?.headers as Headers;
     const insertHeaders = fetchMock.mock.calls[1]?.[1]?.headers as Headers;
-    expect(queryHeaders.get("x-rawtree-database")).toBe("analytics");
-    expect(insertHeaders.get("x-rawtree-database")).toBe("staging");
+    expect(queryHeaders.get("x-rawtree-database")).toBeNull();
+    expect(insertHeaders.get("x-rawtree-database")).toBeNull();
   });
 
   it("supports overriding the user agent", async () => {
@@ -187,10 +193,11 @@ describe("RawTree", () => {
       table: "traces",
       values: { resourceSpans: [] },
       transform: "otlp-traces",
+      database: "analytics",
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://example.com/v1/tables/traces?transform=otlp-traces",
+      "https://example.com/v1/tables/traces?transform=otlp-traces&database=analytics",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ resourceSpans: [] }),

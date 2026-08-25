@@ -148,8 +148,8 @@ new RawTree({
 
 The SDK sends the API key as `Authorization: Bearer <apiKey>`.
 Set `database` on the client for a default database, or override it on an
-individual request. The SDK sends the selected database as
-`x-rawtree-database`.
+individual request. The SDK appends the selected database as the
+`?database=<name>` query parameter.
 
 ### query
 

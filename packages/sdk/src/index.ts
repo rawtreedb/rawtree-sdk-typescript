@@ -203,7 +203,9 @@ export class RawTree {
   }
 
   private async request<T>(config: RequestConfig): Promise<T> {
-    const response = await this.fetchImpl(`${this.baseUrl}${config.path}`, {
+    const database = normalizeDatabase(config.database ?? this.database);
+    const path = appendDatabaseQuery(config.path, database);
+    const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
       method: config.method,
       headers: this.buildHeaders(config),
       body: config.body === undefined ? undefined : JSON.stringify(config.body),
@@ -220,14 +222,6 @@ export class RawTree {
   private buildHeaders(config: RequestConfig): Headers {
     const headers = new Headers(config.headers);
     headers.set("Authorization", `Bearer ${this.apiKey}`);
-
-    const database = config.database ?? this.database;
-    if (database !== undefined) {
-      const normalizedDatabase = normalizeDatabase(database);
-      if (normalizedDatabase !== undefined) {
-        headers.set("x-rawtree-database", normalizedDatabase);
-      }
-    }
 
     if (!headers.has("User-Agent")) {
       headers.set("User-Agent", this.userAgent);
@@ -270,4 +264,13 @@ function normalizeDatabase(database: string | undefined): string | undefined {
   }
 
   return normalized;
+}
+
+function appendDatabaseQuery(path: string, database: string | undefined): string {
+  if (database === undefined) {
+    return path;
+  }
+
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}database=${encodeURIComponent(database)}`;
 }
