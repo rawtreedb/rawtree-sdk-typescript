@@ -93,7 +93,7 @@ describe("RawTree", () => {
     expect(headers).toBeInstanceOf(Headers);
     expect((headers as Headers).get("Authorization")).toBe("Bearer rw_test");
     expect((headers as Headers).get("Content-Type")).toBe("application/json");
-    expect((headers as Headers).get("User-Agent")).toBe("rawtree-sdk-typescript/0.2.0");
+    expect((headers as Headers).get("User-Agent")).toBe("rawtree-sdk-typescript/0.2.1");
     expect((headers as Headers).get("x-rawtree-database")).toBeNull();
   });
 
@@ -209,8 +209,6 @@ describe("RawTree", () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       jsonResponse({
         tables: [{ name: "events", created_at: "2026-04-30", total_rows: 1, total_bytes: 10 }],
-        project: { name: "app" },
-        organization: { name: "team" },
       }),
     );
     const rawtree = new RawTree({ apiKey: "rw_test", fetch: fetchMock });
@@ -232,8 +230,6 @@ describe("RawTree", () => {
           total_bytes: 10,
           columns: [{ name: "event", type: "String" }],
         },
-        project: { name: "app" },
-        organization: { name: "team" },
       }),
     );
     const rawtree = new RawTree({ apiKey: "rw_test", fetch: fetchMock });
