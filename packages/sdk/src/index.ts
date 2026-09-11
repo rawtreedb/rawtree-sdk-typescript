@@ -67,18 +67,8 @@ export interface TableInfo {
   total_bytes: number;
 }
 
-export interface TableProjectRef {
-  name: string;
-}
-
-export interface TableOrganizationRef {
-  name: string;
-}
-
 export interface TablesResponse {
   tables: TableInfo[];
-  project: TableProjectRef;
-  organization: TableOrganizationRef;
 }
 
 export interface DescribeTableEntity extends TableInfo {
@@ -87,8 +77,6 @@ export interface DescribeTableEntity extends TableInfo {
 
 export interface DescribeTableResponse {
   table: DescribeTableEntity;
-  project: TableProjectRef;
-  organization: TableOrganizationRef;
 }
 
 export interface ErrorResponse {
