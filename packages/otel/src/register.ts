@@ -3,16 +3,18 @@ import {
   SimpleSpanProcessor,
   type BufferConfig,
   type ReadableSpan,
+  type Span,
   type SpanExporter,
   type SpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
-import type { Attributes } from "@opentelemetry/api";
+import type { Attributes, Context } from "@opentelemetry/api";
 import {
   type RawTreeIntegration,
   type RawTreeIntegrationTeardown,
   type RawTreeOtelIntegrationContext,
 } from "./client.js";
 import { RawTreeTraceExporter, type RawTreeTraceExporterOptions } from "./exporter.js";
+import { isReportedExportError } from "./reported-export-errors.js";
 import {
   registerRawTreeTracerProvider,
   shutdownRawTreeTracerProvider,
@@ -36,7 +38,7 @@ export interface RawTreeRegisterOtelExporterOptions extends RawTreeRegisterOtelB
 
 export interface RawTreeRegisterOtelRawTreeOptions
   extends RawTreeRegisterOtelBaseOptions,
-    Omit<RawTreeTraceExporterOptions, "service" | "table" | "batch" | "attributes"> {
+    Omit<RawTreeTraceExporterOptions, "service" | "batch" | "attributes"> {
   exporter?: never;
 }
 
@@ -244,7 +246,10 @@ function toSpanProcessor(
   }
 
   return {
-    spanProcessor: new BatchSpanProcessor(spanExporter, options.batchSpanProcessorOptions),
+    spanProcessor: new ReportedExportErrorTolerantSpanProcessor(
+      new BatchSpanProcessor(spanExporter, options.batchSpanProcessorOptions),
+      spanExporter,
+    ),
     ownsSpanProcessor: true,
   };
 }
@@ -286,6 +291,50 @@ class NonClosingSpanExporter implements SpanExporter {
 
   async shutdown(): Promise<void> {
     await this.exporter.forceFlush();
+  }
+}
+
+/**
+ * BatchSpanProcessor rejects forceFlush and shutdown with the error of any
+ * failed export, and skips exporter shutdown when that happens. The exporter
+ * already reports those failures through onExportError, so this wrapper
+ * swallows them (and still shuts the exporter down) instead of crashing the
+ * host application. Any other error, such as an export timeout, still surfaces.
+ */
+class ReportedExportErrorTolerantSpanProcessor implements SpanProcessor {
+  constructor(
+    private readonly processor: SpanProcessor,
+    private readonly exporter: SpanExporter,
+  ) {}
+
+  onStart(span: Span, parentContext: Context): void {
+    this.processor.onStart(span, parentContext);
+  }
+
+  onEnd(span: ReadableSpan): void {
+    this.processor.onEnd(span);
+  }
+
+  async forceFlush(): Promise<void> {
+    try {
+      await this.processor.forceFlush();
+    } catch (error) {
+      if (!isReportedExportError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  async shutdown(): Promise<void> {
+    try {
+      await this.processor.shutdown();
+    } catch (error) {
+      if (!isReportedExportError(error)) {
+        throw error;
+      }
+
+      await this.exporter.shutdown();
+    }
   }
 }
 

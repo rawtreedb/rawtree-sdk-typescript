@@ -25,5 +25,14 @@
     "sdk",
     "typescript"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rawtreedb/rawtree-sdk-typescript.git",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://github.com/rawtreedb/rawtree-sdk-typescript/tree/main/packages/sdk#readme",
+  "bugs": {
+    "url": "https://github.com/rawtreedb/rawtree-sdk-typescript/issues"
+  }
 }

@@ -81,8 +81,6 @@ const agent = new HarnessAgent({
   harness: claudeCode,
   sandbox: createVercelSandbox({ runtime: "node24" }),
   telemetry: {
-    recordInputs: true,
-    recordOutputs: true,
     functionId: "support-agent",
   },
 });
@@ -105,10 +103,14 @@ try {
 ```
 
 OpenTelemetry trace spans are sent to RawTree as OTLP JSON through
-`transform=otlp-traces`. RawTree stores one row per span in the `traces` table,
-with the original span fields plus merged resource attributes such as
-`service.name` and `scope.name`. Future log and metric exporters should follow
-the same signal naming convention with `logs` and `metrics` tables by default.
+`transform=otlp-traces`. RawTree stores one row per span in the `traces` table
+by default (pass `table` to `registerOTel()` to use another table), with the
+original span fields plus merged resource attributes such as `service.name` and
+`scope.name`. The exporter sends traces only. AI SDK telemetry records full
+prompts and model outputs by default. See `packages/otel/README.md` for how to
+turn that off with `recordInputs: false` and `recordOutputs: false`. Future log
+and metric exporters should follow the same signal naming convention with
+`logs` and `metrics` tables by default.
 
 The monitoring client is also available for manual events:
 
@@ -131,7 +133,7 @@ await monitor.span("billing.charge", async () => {
 await monitor.flush();
 ```
 
-See `examples/ai-sdk` for the AI SDK canary `HarnessAgent` flow with Claude
+See `examples/ai-sdk` for the AI SDK `HarnessAgent` flow with Claude
 Code running in Vercel Sandbox. It expects `RAWTREE_API_KEY`, plus whatever
 credentials your Claude Code and Vercel Sandbox setup require.
 

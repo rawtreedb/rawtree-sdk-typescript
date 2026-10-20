@@ -1,6 +1,6 @@
 # RawTree AI SDK Example
 
-This example tries the AI SDK canary harness APIs with RawTree telemetry. It
+This example tries the AI SDK harness APIs with RawTree telemetry. It
 installs `@ai-sdk/otel`, and `aiSdkIntegration()` registers AI SDK's official
 OpenTelemetry integration. `registerOTel()` installs RawTree as the span
 exporter, so every OpenTelemetry span in the process can be sent to RawTree.
@@ -12,9 +12,12 @@ exporter, so every OpenTelemetry span in the process can be sent to RawTree.
 It sends this signal to RawTree:
 
 - OTLP trace spans through `transform=otlp-traces`, stored as one row per span
-  in the `traces` table
+  in the `traces` table, or in `RAWTREE_TABLE` when set
 
-The harness packages are canary/experimental, so expect churn.
+AI SDK records full prompts and model outputs by default
+(`gen_ai.input.messages` and `gen_ai.output.messages`). Add
+`recordInputs: false` and `recordOutputs: false` to the agent's `telemetry`
+options to keep that text out of RawTree.
 
 ## Run
 
@@ -29,6 +32,12 @@ Required environment:
 
 ```sh
 export RAWTREE_API_KEY=...
+```
+
+Optional environment:
+
+```sh
+export RAWTREE_TABLE=ai_traces # defaults to traces
 ```
 
 You will also need Vercel Sandbox auth and Claude Code model auth. For Vercel AI
