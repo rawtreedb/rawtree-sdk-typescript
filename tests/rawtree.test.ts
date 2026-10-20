@@ -1,6 +1,8 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { generateText } from "ai";
 import { SpanStatusCode, trace } from "@opentelemetry/api";
+import { ExportResultCode } from "@opentelemetry/core";
+import { BasicTracerProvider, type ReadableSpan } from "@opentelemetry/sdk-trace-base";
 import { RawTree, RawTreeError, type QueryResponse } from "../packages/sdk/src/index.js";
 import {
   aiSdkIntegration,
@@ -9,6 +11,8 @@ import {
   RawTreeTraceExporter,
   registerOTel,
   shutdownRawTreeTracerProvider,
+  type RawTreeRegisterOtelRawTreeOptions,
+  type RawTreeTraceExporterOptions,
 } from "../packages/otel/src/index.js";
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
@@ -32,6 +36,45 @@ function firstOtlpSpan(fetchMock: ReturnType<typeof vi.fn>) {
 
 function firstOtlpResource(fetchMock: ReturnType<typeof vi.fn>) {
   return firstOtlpExport(fetchMock).resourceSpans[0].resource;
+}
+
+function unauthorizedResponse(message = "Invalid API key"): Response {
+  return jsonResponse(
+    { error: "unauthorized", message, hint: "Check your API key" },
+    { status: 401 },
+  );
+}
+
+function createTestSpans(count: number): ReadableSpan[] {
+  const spans: ReadableSpan[] = [];
+  const provider = new BasicTracerProvider({
+    spanProcessors: [
+      {
+        onStart: () => undefined,
+        onEnd: (span) => {
+          spans.push(span);
+        },
+        forceFlush: async () => undefined,
+        shutdown: async () => undefined,
+      },
+    ],
+  });
+  const tracer = provider.getTracer("rawtree-test-spans");
+
+  for (let index = 0; index < count; index += 1) {
+    tracer.startSpan(`span ${index}`).end();
+  }
+
+  return spans;
+}
+
+function exportSpans(
+  exporter: RawTreeTraceExporter,
+  spans: ReadableSpan[],
+): Promise<{ code: ExportResultCode; error?: Error }> {
+  return new Promise((resolve) => {
+    exporter.export(spans, resolve);
+  });
 }
 
 const DAYTONA_OTEL_ENV_KEYS = [
@@ -871,5 +914,151 @@ describe("RawTree", () => {
     expect(generateContentSpan?.parent_span_id).toBe(agentStepSpan?.span_id);
     expect(toolSpan?.trace_id).toBe(invokeAgentSpan?.trace_id);
     expect(toolSpan?.parent_span_id).toBe(agentStepSpan?.span_id);
+  });
+});
+
+describe("RawTree OpenTelemetry export errors", () => {
+  it("types table and onExportError on registerOTel options", () => {
+    expectTypeOf<RawTreeRegisterOtelRawTreeOptions["table"]>()
+      .toEqualTypeOf<string | undefined>();
+    expectTypeOf<RawTreeRegisterOtelRawTreeOptions["onExportError"]>()
+      .toEqualTypeOf<((error: Error) => void) | undefined>();
+    expectTypeOf<RawTreeTraceExporterOptions["onExportError"]>()
+      .toEqualTypeOf<((error: Error) => void) | undefined>();
+  });
+
+  it("writes registerOTel spans to a custom table", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const otel = registerOTel({
+      serviceName: "api",
+      spanProcessor: "simple",
+      apiKey: "rw_test",
+      table: "ai_traces",
+      fetch: fetchMock,
+    });
+
+    try {
+      trace.getTracer("rawtree-custom-table-test").startSpan("custom table span").end();
+      await otel.shutdown();
+    } finally {
+      await otel.shutdown().catch(() => undefined);
+    }
+
+    expect(fetchMock.mock.calls[0]?.[0])
+      .toBe("https://api.rawtree.com/v1/tables/ai_traces?transform=otlp-traces");
+    expect(firstOtlpSpan(fetchMock)).toMatchObject({ name: "custom table span" });
+  });
+
+  it("logs a failed export once per distinct message and still reports FAILED", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockImplementationOnce(async () => unauthorizedResponse())
+      .mockImplementationOnce(async () => unauthorizedResponse())
+      .mockImplementationOnce(async () => unauthorizedResponse("Database not found"));
+    const exporter = new RawTreeTraceExporter({
+      apiKey: "rw_secret_key",
+      fetch: fetchMock,
+    });
+
+    try {
+      const [first, second, third] = createTestSpans(3).map((span) => [span]);
+      const firstResult = await exportSpans(exporter, first ?? []);
+      await exportSpans(exporter, second ?? []);
+
+      expect(firstResult.code).toBe(ExportResultCode.FAILED);
+      expect(firstResult.error).toBeInstanceOf(RawTreeError);
+      expect(consoleError).toHaveBeenCalledTimes(1);
+      expect(consoleError).toHaveBeenCalledWith(
+        "[rawtree] Failed to export spans to table \"traces\" (HTTP 401): Invalid API key. "
+          + "Check your API key and database.",
+      );
+
+      await exportSpans(exporter, third ?? []);
+
+      expect(consoleError).toHaveBeenCalledTimes(2);
+      expect(consoleError.mock.calls[1]?.[0]).toContain("Database not found");
+      expect(JSON.stringify(consoleError.mock.calls)).not.toContain("rw_secret_key");
+      await expect(exporter.shutdown()).resolves.toBeUndefined();
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("calls a custom onExportError instead of logging", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const onExportError = vi.fn<(error: Error) => void>();
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () => unauthorizedResponse());
+    const exporter = new RawTreeTraceExporter({
+      apiKey: "rw_test",
+      fetch: fetchMock,
+      onExportError,
+    });
+
+    try {
+      const spans = createTestSpans(2);
+      await exportSpans(exporter, spans.slice(0, 1));
+      await exportSpans(exporter, spans.slice(1));
+
+      expect(onExportError).toHaveBeenCalledTimes(2);
+      expect(onExportError.mock.calls[0]?.[0]).toMatchObject({
+        name: "RawTreeError",
+        status: 401,
+      });
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("resolves registerOTel shutdown after a failed batch export", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const onExportError = vi.fn<(error: Error) => void>();
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () => unauthorizedResponse());
+    const otel = registerOTel({
+      serviceName: "api",
+      apiKey: "rw_test",
+      fetch: fetchMock,
+      onExportError,
+      batchSpanProcessorOptions: {
+        scheduledDelayMillis: 60_000,
+      },
+    });
+
+    try {
+      trace.getTracer("rawtree-failed-export-test").startSpan("rejected span").end();
+
+      await expect(otel.shutdown()).resolves.toBeUndefined();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(onExportError).toHaveBeenCalledTimes(1);
+      expect(consoleError).not.toHaveBeenCalled();
+
+      const afterShutdown = await exportSpans(otel.exporter, createTestSpans(1));
+      expect(afterShutdown.code).toBe(ExportResultCode.FAILED);
+      expect(afterShutdown.error?.message).toContain("already shut down");
+    } finally {
+      consoleError.mockRestore();
+      await shutdownRawTreeTracerProvider();
+    }
+  });
+
+  it("does not log when exports succeed", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const otel = registerOTel({
+      serviceName: "api",
+      apiKey: "rw_test",
+      fetch: fetchMock,
+    });
+
+    try {
+      trace.getTracer("rawtree-successful-export-test").startSpan("accepted span").end();
+      await otel.shutdown();
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+      await otel.shutdown().catch(() => undefined);
+    }
   });
 });
