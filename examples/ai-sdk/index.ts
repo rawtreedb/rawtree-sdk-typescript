@@ -19,6 +19,8 @@ const rawtree = registerOTel({
   serviceName: "rawtree-ai-sdk-example",
   apiKey: rawtreeApiKey,
   environment: process.env.NODE_ENV ?? "development",
+  // Optional: write spans to another table. Defaults to "traces".
+  table: process.env.RAWTREE_TABLE,
   integrations: [
     aiSdkIntegration(),
   ],
@@ -77,9 +79,10 @@ const agent = new HarnessAgent({
       }),
     }),
   },
+  // AI SDK 7 telemetry. Inputs and outputs are recorded by default; set
+  // recordInputs: false and recordOutputs: false to keep prompt and response
+  // text out of RawTree.
   telemetry: {
-    recordInputs: true,
-    recordOutputs: true,
     functionId: "ai-sdk-example",
   },
   debug: {

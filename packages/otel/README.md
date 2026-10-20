@@ -52,6 +52,26 @@ npm install @daytona/sdk
 RawTree does not wrap your model or agent. Enable RawTree once when your process
 starts, then use AI SDK telemetry on the AI SDK call or agent.
 
+These examples use the AI SDK 7 `telemetry` option. `experimental_telemetry`
+is a deprecated alias in AI SDK 7. Telemetry is on by default once
+`aiSdkIntegration()` registers the AI SDK OpenTelemetry integration, so
+`isEnabled: true` is not needed. Pass `isEnabled: false` to skip a call.
+
+> **Privacy: prompts and outputs are recorded by default.** AI SDK records
+> inputs and outputs unless you turn them off. Spans stored in RawTree include
+> full prompt and message text in `gen_ai.input.messages` (plus system
+> instructions) and full model responses in `gen_ai.output.messages`. To keep
+> span timing, model, and token usage without that content, set the AI SDK
+> telemetry options on each call or agent:
+>
+> ```ts
+> telemetry: {
+>   recordInputs: false,
+>   recordOutputs: false,
+> },
+> ```
+>
+
 ```ts
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
@@ -70,10 +90,7 @@ try {
   const result = await generateText({
     model: openai("gpt-4o"),
     prompt: "Summarize the latest checkout incident.",
-    experimental_telemetry: {
-      isEnabled: true,
-      recordInputs: true,
-      recordOutputs: true,
+    telemetry: {
       functionId: "checkout-incident-summary",
     },
   });
@@ -105,8 +122,6 @@ const agent = new HarnessAgent({
   harness: claudeCode,
   sandbox: createVercelSandbox({ runtime: "node24" }),
   telemetry: {
-    recordInputs: true,
-    recordOutputs: true,
     functionId: "support-agent",
   },
 });
@@ -170,12 +185,30 @@ See `examples/daytona` in this repository for a runnable Daytona example.
 
 ## What RawTree Receives
 
-`registerOTel()` sends OpenTelemetry trace spans to the `traces` table by
-default using RawTree's `otlp-traces` transform. The exporter posts OTLP JSON to:
+`registerOTel()` sends OpenTelemetry trace spans to RawTree's insert API using
+the `otlp-traces` transform. The exporter posts OTLP JSON to:
 
 ```text
-/v1/tables/traces?transform=otlp-traces
+/v1/tables/<table>?transform=otlp-traces
 ```
+
+The table defaults to `traces`. Pass `table` to write spans to a different
+table, and `database` to pick a database other than your default:
+
+```ts
+const rawtree = registerOTel({
+  apiKey: process.env.RAWTREE_API_KEY!,
+  database: "observability",
+  table: "ai_traces",
+  serviceName: "checkout-agent",
+  integrations: [
+    aiSdkIntegration(),
+  ],
+});
+```
+
+`RawTreeTraceExporter` accepts the same `table` option. The exporter only
+exports traces, so the table receives one row per span.
 
 RawTree stores one row per span. Each row starts with the OTLP span fields such
 as `traceId`, `spanId`, `parentSpanId`, `name`, `startTimeUnixNano`,
@@ -210,6 +243,28 @@ process.on("SIGTERM", () => {
   void rawtree.shutdown().finally(() => process.exit(0));
 });
 ```
+
+## Export Errors
+
+Failed exports do not throw into your app. By default, the first failed export
+is logged with `console.error`. Repeats of the same message are not logged
+again; a failure with a different message is logged once. `shutdown()` still
+flushes pending spans, but it does not reject because an export failed.
+
+Pass `onExportError` to handle failures yourself. It replaces the default
+`console.error` logging and is called for every failed export:
+
+```ts
+const rawtree = registerOTel({
+  apiKey: process.env.RAWTREE_API_KEY!,
+  serviceName: "api",
+  onExportError: (error) => {
+    logger.warn({ err: error }, "RawTree trace export failed");
+  },
+});
+```
+
+`RawTreeTraceExporter` accepts the same `onExportError` option.
 
 ## Existing OpenTelemetry Setup
 
@@ -246,6 +301,10 @@ aiSdkIntegration({
 ```ts
 registerOTel({
   apiKey: string;
+  database?: string;
+  baseUrl?: string;
+  table?: string; // default: "traces"
+  onExportError?: (error: Error) => void;
   serviceName?: string;
   environment?: string;
   release?: string;
@@ -294,9 +353,11 @@ instead of calling `registerOTel()`.
 ```ts
 new RawTreeTraceExporter({
   apiKey: string;
+  database?: string;
   baseUrl?: string;
   fetch?: typeof fetch;
-  table?: string;
+  table?: string; // default: "traces"
+  onExportError?: (error: Error) => void;
 });
 ```
 
