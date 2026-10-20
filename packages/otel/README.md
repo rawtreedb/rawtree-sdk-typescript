@@ -52,16 +52,10 @@ npm install @daytona/sdk
 RawTree does not wrap your model or agent. Enable RawTree once when your process
 starts, then use AI SDK telemetry on the AI SDK call or agent.
 
-These examples use the AI SDK 7 `telemetry` option. `experimental_telemetry`
-is a deprecated alias in AI SDK 7. Telemetry is on by default once
-`aiSdkIntegration()` registers the AI SDK OpenTelemetry integration, so
-`isEnabled: true` is not needed. Pass `isEnabled: false` to skip a call.
-
-> **Privacy: prompts and outputs are recorded by default.** AI SDK records
-> inputs and outputs unless you turn them off. Spans stored in RawTree include
-> full prompt and message text in `gen_ai.input.messages` (plus system
-> instructions) and full model responses in `gen_ai.output.messages`. To keep
-> span timing, model, and token usage without that content, set the AI SDK
+> **Privacy: prompts and outputs are recorded by default.** Spans stored in
+> RawTree include full prompt and message text in `gen_ai.input.messages` (plus
+> system instructions) and full model responses in `gen_ai.output.messages`. To
+> keep span timing, model, and token usage without that content, set the AI SDK
 > telemetry options on each call or agent:
 >
 > ```ts
@@ -70,7 +64,6 @@ is a deprecated alias in AI SDK 7. Telemetry is on by default once
 >   recordOutputs: false,
 > },
 > ```
->
 
 ```ts
 import { generateText } from "ai";
@@ -248,8 +241,8 @@ process.on("SIGTERM", () => {
 
 Failed exports do not throw into your app. By default, the first failed export
 is logged with `console.error`. Repeats of the same message are not logged
-again; a failure with a different message is logged once. `shutdown()` still
-flushes pending spans, but it does not reject because an export failed.
+again. A failure with a different message is logged once. `shutdown()` flushes
+pending spans and does not reject when an export fails.
 
 Pass `onExportError` to handle failures yourself. It replaces the default
 `console.error` logging and is called for every failed export:

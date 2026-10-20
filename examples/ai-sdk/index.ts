@@ -79,9 +79,8 @@ const agent = new HarnessAgent({
       }),
     }),
   },
-  // AI SDK 7 telemetry. Inputs and outputs are recorded by default; set
-  // recordInputs: false and recordOutputs: false to keep prompt and response
-  // text out of RawTree.
+  // Inputs and outputs are recorded by default. Set recordInputs: false and
+  // recordOutputs: false to keep prompt and response text out of RawTree.
   telemetry: {
     functionId: "ai-sdk-example",
   },
