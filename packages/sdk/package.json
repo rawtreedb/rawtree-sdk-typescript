@@ -1,6 +1,6 @@
 {
   "name": "@rawtree/sdk",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "TypeScript SDK for building apps with RawTree.",
   "type": "module",
   "main": "./dist/index.js",
@@ -34,5 +34,8 @@
   "homepage": "https://github.com/rawtreedb/rawtree-sdk-typescript/tree/main/packages/sdk#readme",
   "bugs": {
     "url": "https://github.com/rawtreedb/rawtree-sdk-typescript/issues"
+  },
+  "devDependencies": {
+    "@hey-api/openapi-ts": "0.99.0"
   }
 }

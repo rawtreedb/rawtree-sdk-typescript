@@ -59,7 +59,7 @@
     "@opentelemetry/resources": "^2.8.0",
     "@opentelemetry/sdk-trace-base": "^2.8.0",
     "@opentelemetry/sdk-trace-node": "^2.8.0",
-    "@rawtree/sdk": "0.2.1"
+    "@rawtree/sdk": "0.3.0"
   },
   "peerDependencies": {
     "@daytona/sdk": "^0.187.0",
