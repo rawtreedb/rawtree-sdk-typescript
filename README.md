@@ -233,3 +233,9 @@ Then build, typecheck, and test, and commit the generated code with your change:
 ```sh
 npm run build && npm run typecheck && npm test
 ```
+
+The `Update SDK` workflow does this every day against the production spec and
+opens a PR when the generated code changes. Run it manually from the Actions tab
+to update right after a deploy, optionally with another spec URL. To request
+reviews on its PRs, set the `SDK_UPDATE_REVIEWERS` repository variable to a
+comma-separated list of GitHub usernames.
