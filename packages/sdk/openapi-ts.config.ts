@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { defineConfig } from "@hey-api/openapi-ts";
 
 const source = process.env.RAWTREE_OPENAPI_URL ?? "https://api.rawtree.com/v1/openapi.json";
@@ -7,7 +8,8 @@ const spec = /^https?:\/\//.test(source)
       if (!response.ok) throw new Error(`GET ${source} failed with status ${response.status}`);
       return response.json();
     })
-  : JSON.parse(readFileSync(source, "utf8"));
+  : // npm runs this from packages/sdk; resolve file paths from where the command was run.
+    JSON.parse(readFileSync(resolve(process.env.INIT_CWD ?? process.cwd(), source), "utf8"));
 
 // Inline request-body $refs so flat params spread body fields into the call object.
 for (const item of Object.values<any>(spec.paths)) {

@@ -207,3 +207,29 @@ await rawtree.insert({
 `transform` accepts built-in RawTree transforms such as `otlp-traces`,
 `otlp-logs`, and `otlp-metrics`.
 
+## Development
+
+`packages/sdk/src/generated` is generated from the RawTree OpenAPI spec with
+[Hey API](https://heyapi.dev). Don't edit it by hand: change
+`packages/sdk/openapi-ts.config.ts` or the hand-written wrapper in
+`packages/sdk/src/index.ts`, then regenerate.
+
+Regenerate from the production spec at `https://api.rawtree.com/v1/openapi.json`:
+
+```sh
+npm run generate
+```
+
+Point `RAWTREE_OPENAPI_URL` at another spec, such as a local stack or a saved
+file:
+
+```sh
+RAWTREE_OPENAPI_URL=http://localhost:8082/v1/openapi.json npm run generate
+RAWTREE_OPENAPI_URL=./openapi.json npm run generate
+```
+
+Then build, typecheck, and test, and commit the generated code with your change:
+
+```sh
+npm run build && npm run typecheck && npm test
+```
