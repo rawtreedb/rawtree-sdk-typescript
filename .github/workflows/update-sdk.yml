@@ -1,0 +1,50 @@
+name: Update SDK
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      spec_url:
+        description: OpenAPI spec URL. Leave empty for production.
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-sdk
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    env:
+      RAWTREE_OPENAPI_URL: ${{ inputs.spec_url || 'https://api.rawtree.com/v1/openapi.json' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run generate
+      # PRs opened with GITHUB_TOKEN don't trigger CI, so check here and
+      # report the result in the PR instead.
+      - id: checks
+        continue-on-error: true
+        run: npm run build && npm run typecheck && npm test
+      - uses: peter-evans/create-pull-request@v8
+        with:
+          branch: chore/update-sdk
+          delete-branch: true
+          add-paths: packages/sdk/src
+          commit-message: "chore(sdk): regenerate from the OpenAPI spec"
+          title: "chore(sdk): regenerate from the OpenAPI spec"
+          reviewers: ${{ vars.SDK_UPDATE_REVIEWERS }}
+          body: |
+            Regenerated from ${{ env.RAWTREE_OPENAPI_URL }}.
+
+            ${{ steps.checks.outcome == 'success' && 'Build, typecheck and tests pass.' || 'Build, typecheck or tests failed. The wrapper in `packages/sdk/src/index.ts` may need updating.' }} See the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+      - if: steps.checks.outcome == 'failure'
+        run: exit 1

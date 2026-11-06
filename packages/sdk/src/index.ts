@@ -1,4 +1,17 @@
 import packageJson from "../package.json" with { type: "json" };
+import { createClient, createConfig } from "./generated/client/index.js";
+import { type Options, Query, RawTreeApi, type Tables } from "./generated/sdk.gen.js";
+import type {
+  ErrorResponse,
+  InsertResponse,
+  QueryResponse as GeneratedQueryResponse,
+  QueryRunData,
+} from "./generated/types.gen.js";
+import { databaseOperations } from "./database-operations.gen.js";
+
+export * from "./generated/types.gen.js";
+
+const DEFAULT_BASE_URL = "https://api.rawtree.com";
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
@@ -12,87 +25,9 @@ export interface RawTreeOptions {
   userAgent?: string;
 }
 
-export interface RequestOptions {
-  database?: string;
-  signal?: AbortSignal;
-  headers?: HeadersInit;
-}
-
-export interface QueryParams extends RequestOptions {
-  sql: string;
-}
-
-export interface InsertParams<Row extends JsonObject = JsonObject> extends RequestOptions {
-  table: string;
-  values: Row | Row[];
-  transform?: string;
-}
-
-export interface DescribeTableParams extends RequestOptions {
-  table: string;
-}
-
-export interface QueryResponseColumnMeta {
-  name: string;
-  type: string;
-}
-
-export interface QueryResponseStatistics {
-  elapsed: number;
-  rows_read: number;
-  bytes_read: number;
-}
-
-export interface QueryResponse<Row = unknown> {
-  meta: QueryResponseColumnMeta[];
+export type QueryResponse<Row = unknown> = Omit<GeneratedQueryResponse, "data"> & {
   data: Row[];
-  rows: number;
-  statistics: QueryResponseStatistics;
-  hints?: string[] | null;
-}
-
-export interface InsertResponse {
-  inserted: number;
-}
-
-export interface ColumnInfo {
-  name: string;
-  type: string;
-}
-
-export interface TableInfo {
-  name: string;
-  created_at: string;
-  total_rows: number;
-  total_bytes: number;
-}
-
-export interface TablesResponse {
-  tables: TableInfo[];
-}
-
-export interface DescribeTableEntity extends TableInfo {
-  columns: ColumnInfo[];
-}
-
-export interface DescribeTableResponse {
-  table: DescribeTableEntity;
-}
-
-export interface ErrorResponse {
-  error: string;
-  message: string;
-  hint: string;
-}
-
-interface RequestConfig extends RequestOptions {
-  method: "GET" | "POST";
-  path: string;
-  body?: unknown;
-}
-
-const DEFAULT_BASE_URL = "https://api.rawtree.com";
-const DEFAULT_USER_AGENT = `rawtree-sdk-typescript/${packageJson.version}`;
+};
 
 export class RawTreeError extends Error {
   readonly status: number;
@@ -107,12 +42,10 @@ export class RawTreeError extends Error {
         : typeof body === "string" && body.length > 0
           ? body
           : `RawTree request failed with status ${response.status}`;
-
     super(message);
     this.name = "RawTreeError";
     this.status = response.status;
     this.response = response;
-
     if (typeof body === "object") {
       this.error = body.error;
       this.hint = body.hint;
@@ -120,145 +53,108 @@ export class RawTreeError extends Error {
   }
 }
 
-export class RawTree {
-  readonly tables: {
-    list: (options?: RequestOptions) => Promise<TablesResponse>;
-    describe: (params: DescribeTableParams) => Promise<DescribeTableResponse>;
-  };
+/** Per-request options, such as `signal` and `headers`, accepted as the last argument of every method. */
+export type RequestOptions = Options<never, true>;
+export type QueryParams = Parameters<Query["run"]>[0];
+export type DescribeTableParams = Parameters<Tables["describe"]>[0];
+type QueryOptions = Parameters<Query["run"]>[1];
 
-  private readonly apiKey: string;
-  private readonly database?: string;
-  private readonly baseUrl: string;
-  private readonly fetchImpl: typeof fetch;
-  private readonly userAgent: string;
+class TypedQuery extends Query {
+  override run<Row = unknown>(
+    parameters: QueryParams,
+    options?: QueryOptions,
+  ): Promise<QueryResponse<Row>> {
+    return super.run(parameters, options) as Promise<QueryResponse<Row>>;
+  }
+}
+
+/** `rawtree.query({ sql })` runs a query; `rawtree.query.run` and `rawtree.query.format` stay available. */
+export type QueryClient = TypedQuery &
+  (<Row = unknown>(parameters: QueryParams, options?: QueryOptions) => Promise<QueryResponse<Row>>);
+
+export type InsertRow = Record<string, unknown>;
+
+export type InsertParams<Row extends InsertRow = InsertRow> = Omit<
+  Parameters<Tables["insert"]>[0],
+  "body"
+> & {
+  values: Row | Row[];
+};
+
+/** Calls `fn`, and reads every other property, including generated methods added later, from `group`. */
+function callable<Group extends object, Fn extends (...args: never[]) => unknown>(
+  group: Group,
+  fn: Fn,
+): Fn & Group {
+  return new Proxy(fn, {
+    get(target, key) {
+      if (!(key in group)) return Reflect.get(target, key);
+      const value = Reflect.get(group, key, group);
+      return typeof value === "function" ? value.bind(group) : value;
+    },
+    has: (target, key) => key in group || key in target,
+  }) as Fn & Group;
+}
+
+export class RawTree extends RawTreeApi {
+  private queryClient?: QueryClient;
 
   constructor(options: RawTreeOptions) {
     if (!options || typeof options.apiKey !== "string" || options.apiKey.trim() === "") {
       throw new TypeError("RawTree requires a non-empty apiKey.");
     }
 
-    const fetchImpl = options.fetch ?? globalThis.fetch;
-
-    if (typeof fetchImpl !== "function") {
-      throw new TypeError("RawTree requires a fetch implementation.");
-    }
-
-    this.apiKey = options.apiKey;
-    this.database = normalizeDatabase(options.database);
-    this.baseUrl = normalizeBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL);
-    this.fetchImpl = fetchImpl;
-    this.userAgent = options.userAgent ?? DEFAULT_USER_AGENT;
-    this.tables = {
-      list: (requestOptions) => this.request<TablesResponse>({
-        method: "GET",
-        path: "/v1/tables",
-        ...requestOptions,
+    const client = createClient(
+      createConfig({
+        baseUrl: (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, ""),
+        fetch: options.fetch,
+        auth: () => options.apiKey,
+        headers: {
+          Accept: "application/json",
+          "User-Agent": options.userAgent ?? `rawtree-sdk-typescript/${packageJson.version}`,
+        },
+        throwOnError: true,
+        responseStyle: "data",
       }),
-      describe: ({ table, ...requestOptions }) =>
-        this.request<DescribeTableResponse>({
-          method: "GET",
-          path: `/v1/tables/${encodeURIComponent(table)}`,
-          ...requestOptions,
-        }),
-    };
+    );
+
+    const { database } = options;
+    if (database !== undefined) {
+      client.interceptors.request.use((request, opts) =>
+        databaseOperations.has(`${opts.method} ${opts.url}`)
+          ? withDefaultDatabase(request, database)
+          : request,
+      );
+    }
+    client.interceptors.error.use((error, response) =>
+      response ? new RawTreeError(response, error as Partial<ErrorResponse> | string) : error,
+    );
+
+    super({ client });
   }
 
-  query<Row = unknown>({ sql, ...requestOptions }: QueryParams): Promise<QueryResponse<Row>> {
-    return this.request<QueryResponse<Row>>({
-      method: "POST",
-      path: "/v1/query",
-      body: { sql },
-      ...requestOptions,
-    });
+  override get query(): QueryClient {
+    if (!this.queryClient) {
+      const group = new TypedQuery({ client: this.client });
+      this.queryClient = callable(group, group.run.bind(group));
+    }
+    return this.queryClient;
   }
 
-  insert<Row extends JsonObject = JsonObject>({
-    table,
-    values,
-    transform,
-    ...requestOptions
-  }: InsertParams<Row>): Promise<InsertResponse> {
-    const query = transform
-      ? `?transform=${encodeURIComponent(transform)}`
-      : "";
-
-    return this.request<InsertResponse>({
-      method: "POST",
-      path: `/v1/tables/${encodeURIComponent(table)}${query}`,
-      body: values,
-      ...requestOptions,
-    });
-  }
-
-  private async request<T>(config: RequestConfig): Promise<T> {
-    const database = normalizeDatabase(config.database ?? this.database);
-    const path = appendDatabaseQuery(config.path, database);
-    const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
-      method: config.method,
-      headers: this.buildHeaders(config),
-      body: config.body === undefined ? undefined : JSON.stringify(config.body),
-      signal: config.signal,
-    });
-
-    if (!response.ok) {
-      throw new RawTreeError(response, await readErrorBody(response));
-    }
-
-    return response.json() as Promise<T>;
-  }
-
-  private buildHeaders(config: RequestConfig): Headers {
-    const headers = new Headers(config.headers);
-    headers.set("Authorization", `Bearer ${this.apiKey}`);
-
-    if (!headers.has("User-Agent")) {
-      headers.set("User-Agent", this.userAgent);
-    }
-
-    if (config.body !== undefined && !headers.has("Content-Type")) {
-      headers.set("Content-Type", "application/json");
-    }
-
-    if (!headers.has("Accept")) {
-      headers.set("Accept", "application/json");
-    }
-
-    return headers;
+  /** Shorthand for `rawtree.tables.insert` that takes the rows as `values`. */
+  insert<Row extends InsertRow = InsertRow>(
+    { values, ...parameters }: InsertParams<Row>,
+    options?: RequestOptions,
+  ): Promise<InsertResponse> {
+    return this.tables.insert({ ...parameters, body: values }, options);
   }
 }
 
-async function readErrorBody(response: Response): Promise<Partial<ErrorResponse> | string> {
-  const contentType = response.headers.get("Content-Type") ?? "";
+export type { QueryRunData };
 
-  if (contentType.includes("application/json")) {
-    return response.json() as Promise<Partial<ErrorResponse>>;
-  }
-
-  return response.text();
-}
-
-function normalizeBaseUrl(baseUrl: string): string {
-  return baseUrl.replace(/\/+$/, "");
-}
-
-function normalizeDatabase(database: string | undefined): string | undefined {
-  if (database === undefined) {
-    return undefined;
-  }
-
-  const normalized = database.trim();
-  if (normalized === "") {
-    throw new TypeError("RawTree database must be a non-empty string.");
-  }
-
-  return normalized;
-}
-
-function appendDatabaseQuery(path: string, database: string | undefined): string {
-  if (database === undefined) {
-    return path;
-  }
-
-  const separator = path.includes("?") ? "&" : "?";
-  return `${path}${separator}database=${encodeURIComponent(database)}`;
+function withDefaultDatabase(request: Request, database: string): Request {
+  const url = new URL(request.url);
+  if (url.searchParams.has("database")) return request;
+  url.searchParams.set("database", database);
+  return new Request(url, request);
 }
