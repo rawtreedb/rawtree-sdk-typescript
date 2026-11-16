@@ -2,7 +2,7 @@
 
 import { client } from './client.gen.js';
 import { buildClientParams, type Client, type ClientMeta, type Options as Options2, type RequestResult, type TDataShape } from './client/index.js';
-import type { ApiKeysCreateErrors, ApiKeysCreateResponses, ApiKeysDeleteErrors, ApiKeysDeleteResponses, ApiKeysListErrors, ApiKeysListResponses, ClustersListErrors, ClustersListResponses, DatabasesCreateErrors, DatabasesCreateResponses, DatabasesDeleteErrors, DatabasesDeleteResponses, DatabasesListErrors, DatabasesListResponses, DatabasesVerifyS3AccessErrors, DatabasesVerifyS3AccessResponses, HandlersCreateErrors, HandlersCreateResponses, HandlersInvokeErrors, HandlersInvokeResponses, HandlersListErrors, HandlersListResponses, HealthCheckErrors, HealthCheckResponses, HttpSinkSettingsInput, InsertBody, LogsListErrors, LogsListResponses, OrganizationsListErrors, OrganizationsListResponses, PermissionLevel, PrincipalType, QueryFormatErrors, QueryFormatResponses, QueryRunErrors, QueryRunResponses, S3StorageInput, SinkInput, SinkType, SlackSinkSettingsInput, SlackSinkSettingsPatch, SplCapabilitiesResponses, SplSearchErrors, SplSearchResponses, TablesCreateErrors, TablesCreateResponses, TablesDeleteErrors, TablesDeleteResponses, TablesDescribeErrors, TablesDescribeResponses, TableSinkSettings, TableSinkSettingsPatch, TablesInsertErrors, TablesInsertResponses, TablesListErrors, TablesListResponses, TablesUpdateErrors, TablesUpdateResponses, UpdateWorkflowQuery, UpdateWorkflowSchedule, WorkflowQuery, WorkflowSchedule, WorkflowsCreateErrors, WorkflowsCreateResponses, WorkflowsDeleteErrors, WorkflowsDeleteResponses, WorkflowsGetErrors, WorkflowsGetResponses, WorkflowsListErrors, WorkflowsListResponses, WorkflowsLogsListErrors, WorkflowsLogsListResponses, WorkflowsRunsCancelErrors, WorkflowsRunsCancelResponses, WorkflowsRunsCreateErrors, WorkflowsRunsCreateResponses, WorkflowsRunsListErrors, WorkflowsRunsListResponses, WorkflowsSinksCreateErrors, WorkflowsSinksCreateResponses, WorkflowsSinksDeleteErrors, WorkflowsSinksDeleteResponses, WorkflowsSinksUpdateErrors, WorkflowsSinksUpdateResponses, WorkflowsUpdateErrors, WorkflowsUpdateResponses } from './types.gen.js';
+import type { ActorType, ApiKeysCreateErrors, ApiKeysCreateResponses, ApiKeysDeleteErrors, ApiKeysDeleteResponses, ApiKeysListErrors, ApiKeysListResponses, Category, ClustersListErrors, ClustersListResponses, DatabasesCreateErrors, DatabasesCreateResponses, DatabasesDeleteErrors, DatabasesDeleteResponses, DatabasesListErrors, DatabasesListResponses, DatabasesVerifyS3AccessErrors, DatabasesVerifyS3AccessResponses, FeedbackSubmitErrors, FeedbackSubmitResponses, HandlersCreateErrors, HandlersCreateResponses, HandlersInvokeErrors, HandlersInvokeResponses, HandlersListErrors, HandlersListResponses, HealthCheckErrors, HealthCheckResponses, HttpSinkSettingsInput, InsertBody, LogsListErrors, LogsListResponses, OrganizationsListErrors, OrganizationsListResponses, PermissionLevel, PrincipalType, QueryFormatErrors, QueryFormatResponses, QueryRunErrors, QueryRunResponses, S3StorageInput, SinkInput, SinkType, SlackSinkSettingsInput, SlackSinkSettingsPatch, SplCapabilitiesResponses, SplSearchErrors, SplSearchResponses, TablesCreateErrors, TablesCreateResponses, TablesDeleteErrors, TablesDeleteResponses, TablesDescribeErrors, TablesDescribeResponses, TableSettingValue, TableSinkSettings, TableSinkSettingsPatch, TablesInsertErrors, TablesInsertResponses, TablesListErrors, TablesListResponses, TablesSettingsGetResponses, TablesSettingsUpdateResponses, TablesUpdateErrors, TablesUpdateResponses, UpdateWorkflowQuery, UpdateWorkflowSchedule, WorkflowQuery, WorkflowSchedule, WorkflowsCreateErrors, WorkflowsCreateResponses, WorkflowsDeleteErrors, WorkflowsDeleteResponses, WorkflowsGetErrors, WorkflowsGetResponses, WorkflowsListErrors, WorkflowsListResponses, WorkflowsLogsListErrors, WorkflowsLogsListResponses, WorkflowsRunsCancelErrors, WorkflowsRunsCancelResponses, WorkflowsRunsCreateErrors, WorkflowsRunsCreateResponses, WorkflowsRunsListErrors, WorkflowsRunsListResponses, WorkflowsSinksCreateErrors, WorkflowsSinksCreateResponses, WorkflowsSinksDeleteErrors, WorkflowsSinksDeleteResponses, WorkflowsSinksUpdateErrors, WorkflowsSinksUpdateResponses, WorkflowsUpdateErrors, WorkflowsUpdateResponses } from './types.gen.js';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -254,6 +254,61 @@ export class Databases extends HeyApiClient {
             url: '/v1/databases/{database}',
             ...options,
             ...params
+        });
+    }
+}
+
+export class Feedback extends HeyApiClient {
+    /**
+     * Submit feedback
+     *
+     * Submit feedback with optional organization and cluster UUIDs. Users may submit before creating an organization. Supplied scopes must be accessible to the caller; a cluster alone determines its organization. Extra accepts arbitrary JSON fields. The request body is limited to 32 KiB. Success confirms storage in RawTree's internal feedback table.
+     */
+    public submit<ThrowOnError extends boolean = true>(parameters: {
+        message: string;
+        category: Category;
+        actor_type: ActorType;
+        organization_id?: string | null;
+        cluster_id?: string | null;
+        extra?: {
+            [key: string]: unknown;
+        } | null;
+    }, options?: Options<never, ThrowOnError>): RequestResult<FeedbackSubmitResponses, FeedbackSubmitErrors, ThrowOnError, 'data'> {
+        const params = buildClientParams([parameters], [{ args: [
+                    { in: 'body', key: 'message' },
+                    { in: 'body', key: 'category' },
+                    { in: 'body', key: 'actor_type' },
+                    { in: 'body', key: 'organization_id' },
+                    { in: 'body', key: 'cluster_id' },
+                    { in: 'body', key: 'extra' }
+                ] }]);
+        return (options?.client ?? this.client).post<FeedbackSubmitResponses, FeedbackSubmitErrors, ThrowOnError, 'data'>({
+            responseStyle: 'data',
+            security: [
+                {
+                    key: 'apiKeyAuth',
+                    scheme: 'bearer',
+                    type: 'http'
+                },
+                {
+                    key: 'bearerAuth',
+                    scheme: 'bearer',
+                    type: 'http'
+                },
+                {
+                    key: 'oauth2',
+                    scheme: 'bearer',
+                    type: 'http'
+                }
+            ],
+            url: '/v1/feedback',
+            ...options,
+            ...params,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options?.headers,
+                ...params.headers
+            }
         });
     }
 }
@@ -603,7 +658,7 @@ export class Query extends HeyApiClient {
     /**
      * Execute SQL query and return results in the requested ClickHouse format
      *
-     * Accepts read-only queries, `ALTER TABLE [database.]<table> MODIFY ORDER BY (...)` to change a table sorting key, `ALTER TABLE [database.]<table> ADD PROJECTION [IF NOT EXISTS] <name> (SELECT ...)`, `MATERIALIZE PROJECTION [IF EXISTS] <name>`, `CLEAR PROJECTION [IF EXISTS] <name>`, and `DROP PROJECTION [IF EXISTS] <name>` to manage projections, `ADD INDEX [IF NOT EXISTS] <name> <expression> TYPE <type> [GRANULARITY <n>]`, `MATERIALIZE INDEX [IF EXISTS] <name>`, `CLEAR INDEX [IF EXISTS] <name>`, and `DROP INDEX [IF EXISTS] <name>` to manage indexes (including text indexes), `KILL MUTATION WHERE table = '<table>' [AND mutation_id = '<id>']` to stop a running projection or index materialization or clear in the selected database, `INSERT INTO [database.]<table> [(columns)] SELECT ...` to materialize query results into an existing table, and `CREATE TABLE [IF NOT EXISTS] [database.]<table> ENGINE = ReplicatedRawMergeTree [ORDER BY (...)]` to create a table in the selected user database. ALTER and KILL MUTATION require the same authorization as updating table configuration, and CREATE TABLE the same as creating a table. Unsupported CREATE TABLE statements are rejected with a supported query in the hint. INSERT requires read and write permission, reads only from tables, and reports `statistics.written_rows`. Organization administrators and admin API keys may also CREATE ROLE, DROP ROLE [IF EXISTS], and GRANT SELECT or INSERT on explicitly qualified tables to existing roles; these operations apply to the selected cluster. Administrators may CREATE NAMED COLLECTION [IF NOT EXISTS] <name> [ON CLUSTER default] AS key = literal [NOT OVERRIDABLE | OVERRIDABLE], ... . Only string, numeric, and boolean literals are supported. ON CLUSTER default is passed through with native database semantics; distributed DDL exposes collection values in system.distributed_ddl_queue. Collection use permissions are managed separately; ALTER and DROP NAMED COLLECTION are unsupported. Other DCL and delegation options are not accepted. Administrators may manage WORKLOAD and RESOURCE definitions with CREATE, CREATE OR REPLACE, and DROP; ON CLUSTER default is optional and must be omitted with Keeper-backed workload storage. Reads and INSERT SELECT can select a workload using SQL SETTINGS workload = 'interactive'. Administrators may use CREATE SETTINGS PROFILE (including OR REPLACE) and DROP SETTINGS PROFILE for workload and use_concurrency_control, optionally READONLY or CONST, assigned to explicit existing database roles; arbitrary settings, users, and inheritance are unsupported. Administrators may CREATE ROW POLICY (including OR REPLACE) and DROP ROW POLICY on one table in the selected user database, with a SELECT filter assigned to explicit existing roles. Only ON CLUSTER default is supported and requires an explicitly qualified database.table target. Row policies filter reads for their target roles; they do not constrain writes or guarantee restrictions on untargeted readers.
+     * Accepts read-only queries, `TRUNCATE TABLE [IF EXISTS] [database.]<table> [SYNC]` to remove all rows while preserving table configuration (requires write permission and always waits for replicas), `ALTER TABLE [database.]<table> MODIFY ORDER BY (...)` to change a table sorting key, `ALTER TABLE [database.]<table> MODIFY TTL <expression> [DELETE [WHERE <condition>]]` to set or replace row retention, `ALTER TABLE [database.]<table> MODIFY SETTING name = value, ...` and `RESET SETTING name, ...` to configure engine-supported table settings, `ALTER TABLE [database.]<table> ADD PROJECTION [IF NOT EXISTS] <name> (SELECT ...)`, `MATERIALIZE PROJECTION [IF EXISTS] <name>`, `CLEAR PROJECTION [IF EXISTS] <name>`, and `DROP PROJECTION [IF EXISTS] <name>` to manage projections, `ADD INDEX [IF NOT EXISTS] <name> <expression> TYPE <type> [GRANULARITY <n>]`, `MATERIALIZE INDEX [IF EXISTS] <name>`, `CLEAR INDEX [IF EXISTS] <name>`, and `DROP INDEX [IF EXISTS] <name>` to manage indexes (including text indexes), `KILL MUTATION WHERE table = '<table>' [AND mutation_id = '<id>']` to stop a running projection or index materialization or clear in the selected database, `INSERT INTO [database.]<table> [(columns)] SELECT ...` to materialize query results into an existing table, and `CREATE TABLE [IF NOT EXISTS] [database.]<table> ENGINE = ReplicatedRawMergeTree [ORDER BY (...)] [TTL <expression> [DELETE [WHERE <condition>]]] [SETTINGS name = value, ...]` to create a table in the selected user database. ALTER and KILL MUTATION require the same authorization as updating table configuration, and CREATE TABLE the same as creating a table. Unsupported CREATE TABLE statements are rejected with a supported query in the hint. INSERT requires read and write permission, reads only from tables, and reports `statistics.written_rows`. Organization administrators and admin API keys may also CREATE ROLE, DROP ROLE [IF EXISTS], and GRANT SELECT or INSERT on explicitly qualified tables to existing roles; these operations apply to the selected cluster. Administrators may CREATE NAMED COLLECTION [IF NOT EXISTS] <name> [ON CLUSTER default] AS key = literal [NOT OVERRIDABLE | OVERRIDABLE], ... . Only string, numeric, and boolean literals are supported. ON CLUSTER default is passed through with native database semantics; distributed DDL exposes collection values in system.distributed_ddl_queue. Collection use permissions are managed separately; ALTER and DROP NAMED COLLECTION are unsupported. Other DCL and delegation options are not accepted. Administrators may manage WORKLOAD and RESOURCE definitions with CREATE, CREATE OR REPLACE, and DROP; ON CLUSTER default is optional and must be omitted with Keeper-backed workload storage. Reads and INSERT SELECT can select a workload using SQL SETTINGS workload = 'interactive'. Administrators may use CREATE SETTINGS PROFILE (including OR REPLACE) and DROP SETTINGS PROFILE for workload and use_concurrency_control, optionally READONLY or CONST, assigned to explicit existing database roles; arbitrary settings, users, and inheritance are unsupported. Administrators may CREATE ROW POLICY (including OR REPLACE) and DROP ROW POLICY on one table in the selected user database, with a SELECT filter assigned to explicit existing roles. Only ON CLUSTER default is supported and requires an explicitly qualified database.table target. Row policies filter reads for their target roles; they do not constrain writes or guarantee restrictions on untargeted readers.
      */
     public run<ThrowOnError extends boolean = true>(parameters: {
         organization?: string;
@@ -742,6 +797,83 @@ export class Spl extends HeyApiClient {
     }
 }
 
+export class Settings extends HeyApiClient {
+    /**
+     * Read editable table settings
+     */
+    public get<ThrowOnError extends boolean = true>(parameters: {
+        table: string;
+        organization?: string;
+        cluster?: string;
+        database?: string;
+    }, options?: Options<never, ThrowOnError>): RequestResult<TablesSettingsGetResponses, unknown, ThrowOnError, 'data'> {
+        const params = buildClientParams([parameters], [{ args: [
+                    { in: 'path', key: 'table' },
+                    { in: 'query', key: 'organization' },
+                    { in: 'query', key: 'cluster' },
+                    { in: 'query', key: 'database' }
+                ] }]);
+        return (options?.client ?? this.client).get<TablesSettingsGetResponses, unknown, ThrowOnError, 'data'>({
+            responseStyle: 'data',
+            security: [{
+                    key: 'apiKeyAuth',
+                    scheme: 'bearer',
+                    type: 'http'
+                }, {
+                    key: 'oauth2',
+                    scheme: 'bearer',
+                    type: 'http'
+                }],
+            url: '/v1/tables/{table}/settings',
+            ...options,
+            ...params
+        });
+    }
+    
+    /**
+     * Update table settings
+     */
+    public update<ThrowOnError extends boolean = true>(parameters: {
+        table: string;
+        organization?: string;
+        cluster?: string;
+        database?: string;
+        body: {
+            replacing_enable: boolean;
+        } | {
+            settings: string;
+        };
+    }, options?: Options<never, ThrowOnError>): RequestResult<TablesSettingsUpdateResponses, unknown, ThrowOnError, 'data'> {
+        const params = buildClientParams([parameters], [{ args: [
+                    { in: 'path', key: 'table' },
+                    { in: 'query', key: 'organization' },
+                    { in: 'query', key: 'cluster' },
+                    { in: 'query', key: 'database' },
+                    { key: 'body', map: 'body' }
+                ] }]);
+        return (options?.client ?? this.client).patch<TablesSettingsUpdateResponses, unknown, ThrowOnError, 'data'>({
+            responseStyle: 'data',
+            security: [{
+                    key: 'apiKeyAuth',
+                    scheme: 'bearer',
+                    type: 'http'
+                }, {
+                    key: 'oauth2',
+                    scheme: 'bearer',
+                    type: 'http'
+                }],
+            url: '/v1/tables/{table}/settings',
+            ...options,
+            ...params,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options?.headers,
+                ...params.headers
+            }
+        });
+    }
+}
+
 export class Tables extends HeyApiClient {
     /**
      * List all tables in a database
@@ -782,13 +914,19 @@ export class Tables extends HeyApiClient {
         database?: string;
         name: string;
         sorting_key?: string | null;
+        ttl?: string | null;
+        settings?: {
+            [key: string]: TableSettingValue;
+        };
     }, options?: Options<never, ThrowOnError>): RequestResult<TablesCreateResponses, TablesCreateErrors, ThrowOnError, 'data'> {
         const params = buildClientParams([parameters], [{ args: [
                     { in: 'query', key: 'organization' },
                     { in: 'query', key: 'cluster' },
                     { in: 'query', key: 'database' },
                     { in: 'body', key: 'name' },
-                    { in: 'body', key: 'sorting_key' }
+                    { in: 'body', key: 'sorting_key' },
+                    { in: 'body', key: 'ttl' },
+                    { in: 'body', key: 'settings' }
                 ] }]);
         return (options?.client ?? this.client).post<TablesCreateResponses, TablesCreateErrors, ThrowOnError, 'data'>({
             responseStyle: 'data',
@@ -885,13 +1023,19 @@ export class Tables extends HeyApiClient {
         cluster?: string;
         database?: string;
         sorting_key?: string | null;
+        ttl?: string | null;
+        settings?: {
+            [key: string]: TableSettingValue;
+        };
     }, options?: Options<never, ThrowOnError>): RequestResult<TablesUpdateResponses, TablesUpdateErrors, ThrowOnError, 'data'> {
         const params = buildClientParams([parameters], [{ args: [
                     { in: 'path', key: 'table' },
                     { in: 'query', key: 'organization' },
                     { in: 'query', key: 'cluster' },
                     { in: 'query', key: 'database' },
-                    { in: 'body', key: 'sorting_key' }
+                    { in: 'body', key: 'sorting_key' },
+                    { in: 'body', key: 'ttl' },
+                    { in: 'body', key: 'settings' }
                 ] }]);
         return (options?.client ?? this.client).patch<TablesUpdateResponses, TablesUpdateErrors, ThrowOnError, 'data'>({
             responseStyle: 'data',
@@ -964,6 +1108,11 @@ export class Tables extends HeyApiClient {
                 ...params.headers
             }
         });
+    }
+    
+    private _settings?: Settings;
+    get settings(): Settings {
+        return this._settings ??= new Settings({ client: this.client });
     }
 }
 
@@ -1567,6 +1716,11 @@ export class RawTreeApi extends HeyApiClient {
     private _databases?: Databases;
     get databases(): Databases {
         return this._databases ??= new Databases({ client: this.client });
+    }
+    
+    private _feedback?: Feedback;
+    get feedback(): Feedback {
+        return this._feedback ??= new Feedback({ client: this.client });
     }
     
     private _handlers?: Handlers;

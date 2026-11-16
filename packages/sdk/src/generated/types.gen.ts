@@ -11,6 +11,8 @@ export type AcceptedWorkflowRun = {
     source: WorkflowRunSource;
 };
 
+export type ActorType = 'human' | 'agent';
+
 export type ApiKeyDatabaseRef = {
     name: string;
 };
@@ -33,6 +35,8 @@ export type ApiKeyItem = {
     database: ApiKeyDatabaseRef;
     created_at: string;
 };
+
+export type Category = 'bug' | 'feature_request' | 'question' | 'other';
 
 export type ClusterItem = {
     id: string;
@@ -116,6 +120,14 @@ export type CreateTableResponse = {
     table: string;
     storage: TableStorageResponse;
     sorting_key: string;
+    /**
+     * Stored row-deletion TTL expression, or null when no TTL is configured.
+     */
+    ttl?: string | null;
+    /**
+     * Explicit table settings, with SQL values and secrets masked by the engine.
+     */
+    settings: Array<TableSetting>;
 };
 
 export type DatabaseItem = {
@@ -149,10 +161,27 @@ export type DescribeTableEntity = {
      * Sorting key expressions in key order, empty when the table picks a key per part.
      */
     sorting_key: string;
+    /**
+     * Stored row-deletion TTL expression, or null when no TTL is configured.
+     */
+    ttl?: string | null;
+    /**
+     * Explicit table settings, with SQL values and secrets masked by the engine.
+     */
+    settings: Array<TableSetting>;
 };
 
 export type DescribeTableResponse = {
     table: DescribeTableEntity;
+};
+
+export type EffectiveTableSetting = {
+    name: string;
+    /**
+     * SQL representation of the effective value.
+     */
+    value: string;
+    level: TableSettingLevel;
 };
 
 /**
@@ -162,6 +191,11 @@ export type ErrorResponse = {
     error: string;
     message: string;
     hint: string;
+};
+
+export type FeedbackReceipt = {
+    id: string;
+    created_at: string;
 };
 
 export type HandlerDefinition = {
@@ -632,6 +666,31 @@ export type TableS3DestinationResponse = {
     path: string;
 };
 
+export type TableSetting = {
+    name: string;
+    /**
+     * SQL representation of the value, with secrets masked by the engine.
+     */
+    value: string;
+};
+
+export type TableSettingLevel = 'Table' | 'Inherited';
+
+/**
+ * JSON settings accept literal values; SQL expressions belong in the Query API.
+ */
+export type TableSettingValue = boolean | number | string;
+
+export type TableSettingsResponse = {
+    settings: Array<EffectiveTableSetting>;
+    sorting_key: string;
+    /**
+     * Effective value, or null when the engine does not support replacing_enable.
+     */
+    replacing_enable?: boolean | null;
+    can_update: boolean;
+};
+
 export type TableSinkSettings = {
     database: string;
     table: string;
@@ -658,6 +717,20 @@ export type UpdateTableResponse = {
     database: string;
     table: string;
     sorting_key: string;
+    /**
+     * Stored row-deletion TTL expression, or null when no TTL is configured.
+     */
+    ttl?: string | null;
+    /**
+     * Explicit table settings, with SQL values and secrets masked by the engine.
+     */
+    settings: Array<TableSetting>;
+};
+
+export type UpdateTableSettingsRequest = {
+    replacing_enable: boolean;
+} | {
+    settings: string;
 };
 
 export type UpdateWorkflowQuery = {
@@ -699,6 +772,7 @@ export type WorkflowLog = {
     sink_type?: string | null;
     status_code?: number | null;
     error_code?: string | null;
+    error_message?: string | null;
     duration_ms?: number | null;
     match_count?: number | null;
     read_rows?: number | null;
@@ -927,6 +1001,55 @@ export type DatabasesDeleteResponses = {
 };
 
 export type DatabasesDeleteResponse = DatabasesDeleteResponses[keyof DatabasesDeleteResponses];
+
+export type FeedbackSubmitData = {
+    body: {
+        /**
+         * Nonblank feedback, limited to 16 KiB of UTF-8 text.
+         */
+        message: string;
+        category: Category;
+        /**
+         * Caller-declared author of the feedback; independent of authenticated identity.
+         */
+        actor_type: ActorType;
+        /**
+         * Defaults to the credential scope or the supplied cluster's organization.
+         */
+        organization_id?: string | null;
+        /**
+         * Defaults to the credential's cluster for API keys and workload tokens.
+         */
+        cluster_id?: string | null;
+        /**
+         * Additional JSON fields, including nested objects and arrays.
+         */
+        extra?: {
+            [key: string]: unknown;
+        } | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/feedback';
+};
+
+export type FeedbackSubmitErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    413: ErrorResponse;
+    429: ErrorResponse;
+    503: ErrorResponse;
+};
+
+export type FeedbackSubmitError = FeedbackSubmitErrors[keyof FeedbackSubmitErrors];
+
+export type FeedbackSubmitResponses = {
+    201: FeedbackReceipt;
+};
+
+export type FeedbackSubmitResponse = FeedbackSubmitResponses[keyof FeedbackSubmitResponses];
 
 export type HandlersListData = {
     body?: never;
@@ -1484,6 +1607,16 @@ export type TablesCreateData = {
          * to let the table pick a key per part from the ingested data.
          */
         sorting_key?: string | null;
+        /**
+         * Row-deletion TTL expression, optionally followed by DELETE WHERE <condition>.
+         */
+        ttl?: string | null;
+        /**
+         * Optional engine settings. Values are JSON booleans, numbers, or strings.
+         */
+        settings?: {
+            [key: string]: TableSettingValue;
+        };
     };
     path?: never;
     query?: {
@@ -1601,6 +1734,16 @@ export type TablesUpdateData = {
          * Comma-separated SQL expressions for the custom sorting key.
          */
         sorting_key?: string | null;
+        /**
+         * Row-deletion TTL expression, optionally followed by DELETE WHERE <condition>.
+         */
+        ttl?: string | null;
+        /**
+         * Optional engine settings. Values are JSON booleans, numbers, or strings.
+         */
+        settings?: {
+            [key: string]: TableSettingValue;
+        };
     };
     path: {
         /**
@@ -1711,6 +1854,72 @@ export type TablesInsertResponses = {
 };
 
 export type TablesInsertResponse = TablesInsertResponses[keyof TablesInsertResponses];
+
+export type TablesSettingsGetData = {
+    body?: never;
+    path: {
+        /**
+         * Table name
+         */
+        table: string;
+    };
+    query?: {
+        /**
+         * Organization name. Required for user and OAuth sessions.
+         */
+        organization?: string;
+        /**
+         * Cluster name. Required only when the organization has multiple clusters.
+         */
+        cluster?: string;
+        /**
+         * Database to use. Also accepted as the x-rawtree-database header. Defaults to the API key's database, or default for user and OAuth sessions.
+         */
+        database?: string;
+    };
+    url: '/v1/tables/{table}/settings';
+};
+
+export type TablesSettingsGetResponses = {
+    200: TableSettingsResponse;
+};
+
+export type TablesSettingsGetResponse = TablesSettingsGetResponses[keyof TablesSettingsGetResponses];
+
+export type TablesSettingsUpdateData = {
+    body: {
+        replacing_enable: boolean;
+    } | {
+        settings: string;
+    };
+    path: {
+        /**
+         * Table name
+         */
+        table: string;
+    };
+    query?: {
+        /**
+         * Organization name. Required for user and OAuth sessions.
+         */
+        organization?: string;
+        /**
+         * Cluster name. Required only when the organization has multiple clusters.
+         */
+        cluster?: string;
+        /**
+         * Database to use. Also accepted as the x-rawtree-database header. Defaults to the API key's database, or default for user and OAuth sessions.
+         */
+        database?: string;
+    };
+    url: '/v1/tables/{table}/settings';
+};
+
+export type TablesSettingsUpdateResponses = {
+    200: UpdateTableSettingsRequest;
+};
+
+export type TablesSettingsUpdateResponse = TablesSettingsUpdateResponses[keyof TablesSettingsUpdateResponses];
 
 export type WorkflowsListData = {
     body?: never;

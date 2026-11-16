@@ -9,5 +9,7 @@ export const databaseOperations: ReadonlySet<string> = new Set([
   "GET /v1/tables/{table}",
   "POST /v1/tables/{table}",
   "DELETE /v1/tables/{table}",
-  "PATCH /v1/tables/{table}"
+  "PATCH /v1/tables/{table}",
+  "GET /v1/tables/{table}/settings",
+  "PATCH /v1/tables/{table}/settings"
 ]);
