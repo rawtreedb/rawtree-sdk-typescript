@@ -6,7 +6,7 @@ TypeScript packages for building apps with RawTree.
 
 ## Packages
 
-- `@rawtree/sdk`: RawTree API client for query, insert, and table metadata.
+- `@rawtree/sdk`: RawTree API client, generated from the RawTree OpenAPI spec.
 - `@rawtree/otel`: OpenTelemetry setup, RawTree trace export, and optional AI
   SDK integration.
 
@@ -38,6 +38,7 @@ const result = await rawtree.query<{ event: string; count: number }>({
 
 const tables = await rawtree.tables.list();
 const schema = await rawtree.tables.describe({ table: "events" });
+const workflows = await rawtree.workflows.list();
 ```
 
 ## Monitoring
@@ -148,41 +149,93 @@ new RawTree({
 });
 ```
 
-The SDK sends the API key as `Authorization: Bearer <apiKey>`.
-Set `database` on the client for a default database, or override it on an
-individual request. The SDK appends the selected database as the
-`?database=<name>` query parameter.
+The SDK sends the API key as `Authorization: Bearer <apiKey>`. It covers every
+API operation that accepts an API key. Operations that need a user session
+aren't included.
+
+Methods follow the API's operation IDs: `tables.describe` is
+`rawtree.tables.describe()`, `workflows.runs.list` is
+`rawtree.workflows.runs.list()`. Each method takes one object with the
+operation's path, query and body fields, plus an optional second argument for
+per-request options such as `signal` and `headers`.
+
+```ts
+const controller = new AbortController();
+
+await rawtree.databases.create({ name: "analytics" });
+await rawtree.tables.list({}, { signal: controller.signal });
+```
+
+Set `database` on the client for a default database. The SDK sends it as the
+`?database=<name>` query parameter on operations that take a database, unless
+the call passes its own `database`.
+
+Failed requests throw `RawTreeError`, with the HTTP `status` and the API's
+`error`, `message` and `hint`.
 
 ### query
 
-```ts
-rawtree.query<Row = unknown>(params: QueryParams): Promise<QueryResponse<Row>>;
+`rawtree.query()` is a shorthand for `rawtree.query.run()`. Pass a row type to
+type `data`.
 
-interface QueryParams extends RequestOptions {
-  sql: string;
-}
+```ts
+const result = await rawtree.query<{ event: string }>({
+  sql: "SELECT event FROM events",
+});
+
+const { formatted } = await rawtree.query.format({ sql: "select 1" });
 ```
 
 ### insert
 
-```ts
-rawtree.insert<Row extends JsonObject = JsonObject>(
-  params: InsertParams<Row>,
-): Promise<InsertResponse>;
-
-interface InsertParams<Row extends JsonObject = JsonObject> extends RequestOptions {
-  table: string;
-  values: Row | Row[];
-  transform?: string;
-}
-```
-
-`InsertParams.transform` can be used with built-in RawTree transforms such as
-`otlp-traces`, `otlp-logs`, and `otlp-metrics`.
-
-### tables
+`rawtree.insert()` is a shorthand for `rawtree.tables.insert()` that takes the
+rows as `values` instead of `body`. Pass one JSON object or an array of them.
 
 ```ts
-rawtree.tables.list(options?: RequestOptions): Promise<TablesResponse>;
-rawtree.tables.describe(params: DescribeTableParams): Promise<DescribeTableResponse>;
+await rawtree.insert({
+  table: "events",
+  values: [{ event: "signup", user_id: "u_123" }],
+});
+
+await rawtree.insert({
+  table: "traces",
+  values: otlpTraceExport,
+  transform: "otlp-traces",
+});
 ```
+
+`transform` accepts built-in RawTree transforms such as `otlp-traces`,
+`otlp-logs`, and `otlp-metrics`.
+
+## Development
+
+`packages/sdk/src/generated` is generated from the RawTree OpenAPI spec with
+[Hey API](https://heyapi.dev). Don't edit it by hand: change
+`packages/sdk/openapi-ts.config.ts` or the hand-written wrapper in
+`packages/sdk/src/index.ts`, then regenerate.
+
+Regenerate from the production spec at `https://api.rawtree.com/v1/openapi.json`:
+
+```sh
+npm run generate
+```
+
+Point `RAWTREE_OPENAPI_URL` at another spec, such as a local stack or a saved
+file:
+
+```sh
+RAWTREE_OPENAPI_URL=http://localhost:8082/v1/openapi.json npm run generate
+RAWTREE_OPENAPI_URL=./openapi.json npm run generate
+```
+
+Then build, typecheck, and test, and commit the generated code with your change:
+
+```sh
+npm run build && npm run typecheck && npm test
+```
+
+The `Update SDK` workflow does this every day against the production spec and
+opens a PR when the generated code changes. Run it manually from the Actions tab
+to update right after a deploy, optionally with another spec URL. To request
+reviews on its PRs, set the `SDK_UPDATE_REVIEWERS` repository variable to a
+comma-separated list of GitHub usernames.

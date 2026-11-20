@@ -10,7 +10,8 @@
   "scripts": {
     "build": "npm --workspace @rawtree/sdk run build && npm --workspace @rawtree/otel run build",
     "test": "vitest run",
-    "typecheck": "npm --workspace @rawtree/sdk run typecheck && npm --workspace @rawtree/otel run typecheck"
+    "typecheck": "npm --workspace @rawtree/sdk run typecheck && npm --workspace @rawtree/otel run typecheck",
+    "generate": "npm --workspace @rawtree/sdk run generate"
   },
   "keywords": [
     "rawtree",
