@@ -1,7 +1,10 @@
 // Generated from the OpenAPI spec by openapi-ts.config.ts.
 export const databaseOperations: ReadonlySet<string> = new Set([
+  "POST /v1/api-keys",
+  "GET /v1/handlers",
+  "POST /v1/handlers",
   "GET /v1/handlers/{path}",
-  "POST /v1/keys",
+  "GET /v1/query",
   "POST /v1/query",
   "POST /v1/spl/search",
   "GET /v1/tables",

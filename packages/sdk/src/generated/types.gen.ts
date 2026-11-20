@@ -198,6 +198,11 @@ export type FeedbackReceipt = {
     created_at: string;
 };
 
+export type FirehoseInsertResponse = {
+    requestId: string;
+    timestamp: number;
+};
+
 export type HandlerDefinition = {
     /**
      * Handler name, unique across the selected cluster's databases.
@@ -263,9 +268,11 @@ export type InsertResponse = {
      *
      * @deprecated
      */
-    inserted?: number | null;
+    inserted: number | null;
     [key: string]: unknown;
 };
+
+export type InsertSuccessResponse = FirehoseInsertResponse | InsertResponse;
 
 export type ListApiKeysResponse = {
     keys: Array<ApiKeyItem>;
@@ -844,15 +851,95 @@ export type HealthCheckResponses = {
 
 export type HealthCheckResponse = HealthCheckResponses[keyof HealthCheckResponses];
 
-export type ClustersListData = {
+export type ApiKeysListData = {
     body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/api-keys';
+};
+
+export type ApiKeysListErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+};
+
+export type ApiKeysListError = ApiKeysListErrors[keyof ApiKeysListErrors];
+
+export type ApiKeysListResponses = {
+    200: ListApiKeysResponse;
+};
+
+export type ApiKeysListResponse = ApiKeysListResponses[keyof ApiKeysListResponses];
+
+export type ApiKeysCreateData = {
+    body: {
+        principal_type?: null | PrincipalType;
+        principal_id?: string | null;
+        /**
+         * Expiration instant in RFC 3339 format. Omitted or null means never.
+         */
+        expires_at?: string | null;
+        name: string;
+        permission?: null | PermissionLevel;
+        /**
+         * Existing ClickHouse roles. Mutually exclusive with permission.
+         */
+        database_roles?: Array<string> | null;
+    };
     path?: never;
     query?: {
         /**
-         * Organization name; required for users, optional for API keys
+         * Default database stored on the new key. Also accepted as the x-rawtree-database header. Defaults to default.
          */
-        organization?: string;
+        database?: string;
     };
+    url: '/v1/api-keys';
+};
+
+export type ApiKeysCreateErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+};
+
+export type ApiKeysCreateError = ApiKeysCreateErrors[keyof ApiKeysCreateErrors];
+
+export type ApiKeysCreateResponses = {
+    200: CreateApiKeyResponse;
+};
+
+export type ApiKeysCreateResponse = ApiKeysCreateResponses[keyof ApiKeysCreateResponses];
+
+export type ApiKeysDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * API key UUID.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/v1/api-keys/{id}';
+};
+
+export type ApiKeysDeleteErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+};
+
+export type ApiKeysDeleteError = ApiKeysDeleteErrors[keyof ApiKeysDeleteErrors];
+
+export type ApiKeysDeleteResponses = {
+    200: DeleteApiKeyResponse;
+};
+
+export type ApiKeysDeleteResponse = ApiKeysDeleteResponses[keyof ApiKeysDeleteResponses];
+
+export type ClustersListData = {
+    body?: never;
+    path?: never;
+    query?: never;
     url: '/v1/clusters';
 };
 
@@ -873,16 +960,7 @@ export type ClustersListResponse = ClustersListResponses[keyof ClustersListRespo
 export type DatabasesListData = {
     body?: never;
     path?: never;
-    query?: {
-        /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required only when the organization has multiple clusters.
-         */
-        cluster?: string;
-    };
+    query?: never;
     url: '/v1/databases';
 };
 
@@ -906,16 +984,7 @@ export type DatabasesCreateData = {
         s3_storage?: null | S3StorageInput;
     };
     path?: never;
-    query?: {
-        /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required only when the organization has multiple clusters.
-         */
-        cluster?: string;
-    };
+    query?: never;
     url: '/v1/databases';
 };
 
@@ -940,16 +1009,7 @@ export type DatabasesVerifyS3AccessData = {
         s3_storage?: null | S3StorageInput;
     };
     path?: never;
-    query?: {
-        /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required only when the organization has multiple clusters.
-         */
-        cluster?: string;
-    };
+    query?: never;
     url: '/v1/databases/verify-s3-access';
 };
 
@@ -975,16 +1035,7 @@ export type DatabasesDeleteData = {
          */
         database: string;
     };
-    query?: {
-        /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required only when the organization has multiple clusters.
-         */
-        cluster?: string;
-    };
+    query?: never;
     url: '/v1/databases/{database}';
 };
 
@@ -1056,13 +1107,9 @@ export type HandlersListData = {
     path?: never;
     query?: {
         /**
-         * Organization name. Required for user and OAuth sessions.
+         * Database to use. Defaults to the API key's database, or default for user sessions and OAuth tokens.
          */
-        organization?: string;
-        /**
-         * Cluster name. Required only when the organization has multiple clusters.
-         */
-        cluster?: string;
+        database?: string;
     };
     url: '/v1/handlers';
 };
@@ -1099,13 +1146,9 @@ export type HandlersCreateData = {
     path?: never;
     query?: {
         /**
-         * Organization name. Required for user and OAuth sessions.
+         * Database to use. Defaults to the API key's database, or default for user sessions and OAuth tokens.
          */
-        organization?: string;
-        /**
-         * Cluster name. Required only when the organization has multiple clusters.
-         */
-        cluster?: string;
+        database?: string;
     };
     url: '/v1/handlers';
 };
@@ -1135,15 +1178,7 @@ export type HandlersInvokeData = {
     };
     query?: {
         /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required only when the organization has multiple clusters.
-         */
-        cluster?: string;
-        /**
-         * Database to use. Also accepted as the x-rawtree-database header. Defaults to the API key's database, or default for user and OAuth sessions.
+         * Database to use. Defaults to the API key's database, or default for user sessions and OAuth tokens.
          */
         database?: string;
     };
@@ -1183,117 +1218,6 @@ export type HandlersInvokeResponses = {
      */
     200: unknown;
 };
-
-export type ApiKeysListData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required only when the organization has multiple clusters.
-         */
-        cluster?: string;
-    };
-    url: '/v1/keys';
-};
-
-export type ApiKeysListErrors = {
-    401: ErrorResponse;
-    403: ErrorResponse;
-};
-
-export type ApiKeysListError = ApiKeysListErrors[keyof ApiKeysListErrors];
-
-export type ApiKeysListResponses = {
-    200: ListApiKeysResponse;
-};
-
-export type ApiKeysListResponse = ApiKeysListResponses[keyof ApiKeysListResponses];
-
-export type ApiKeysCreateData = {
-    body: {
-        principal_type?: null | PrincipalType;
-        principal_id?: string | null;
-        /**
-         * Expiration instant in RFC 3339 format. Omitted or null means never.
-         */
-        expires_at?: string | null;
-        name: string;
-        permission?: null | PermissionLevel;
-        /**
-         * Existing ClickHouse roles. Mutually exclusive with permission.
-         */
-        database_roles?: Array<string> | null;
-    };
-    path?: never;
-    query?: {
-        /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required only when the organization has multiple clusters.
-         */
-        cluster?: string;
-        /**
-         * Default database stored on the new key. Also accepted as the x-rawtree-database header. Defaults to default.
-         */
-        database?: string;
-    };
-    url: '/v1/keys';
-};
-
-export type ApiKeysCreateErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    403: ErrorResponse;
-};
-
-export type ApiKeysCreateError = ApiKeysCreateErrors[keyof ApiKeysCreateErrors];
-
-export type ApiKeysCreateResponses = {
-    201: CreateApiKeyResponse;
-};
-
-export type ApiKeysCreateResponse = ApiKeysCreateResponses[keyof ApiKeysCreateResponses];
-
-export type ApiKeysDeleteData = {
-    body?: never;
-    path: {
-        /**
-         * Either `id` (UUID) or `token` (full `rt_...` token).
-         */
-        id_or_token: string;
-    };
-    query?: {
-        /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required only when the organization has multiple clusters.
-         */
-        cluster?: string;
-    };
-    url: '/v1/keys/{id_or_token}';
-};
-
-export type ApiKeysDeleteErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    403: ErrorResponse;
-};
-
-export type ApiKeysDeleteError = ApiKeysDeleteErrors[keyof ApiKeysDeleteErrors];
-
-export type ApiKeysDeleteResponses = {
-    200: DeleteApiKeyResponse;
-};
-
-export type ApiKeysDeleteResponse = ApiKeysDeleteResponses[keyof ApiKeysDeleteResponses];
 
 export type LogsListData = {
     body?: never;
@@ -1355,14 +1279,6 @@ export type LogsListData = {
          * Number of rows to skip (default 0).
          */
         offset?: number;
-        /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required only when the organization has multiple clusters.
-         */
-        cluster?: string;
     };
     url: '/v1/logs';
 };
@@ -1400,6 +1316,43 @@ export type OrganizationsListResponses = {
 
 export type OrganizationsListResponse = OrganizationsListResponses[keyof OrganizationsListResponses];
 
+export type QueryRunReadOnlyData = {
+    body?: never;
+    path?: never;
+    query: {
+        sql: string;
+        query_id?: string;
+        /**
+         * Optional ClickHouse output format. Defaults to JSON.
+         * JSONEachRowWithProgress streams read-query records; errors after headers
+         * are reported in the body and clients must consume the complete stream.
+         */
+        format?: string;
+        /**
+         * Database to use. Defaults to the API key's database, or default for user sessions and OAuth tokens.
+         */
+        database?: string;
+    };
+    url: '/v1/query';
+};
+
+export type QueryRunReadOnlyErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    408: ErrorResponse;
+    409: ErrorResponse;
+    429: ErrorResponse;
+};
+
+export type QueryRunReadOnlyError = QueryRunReadOnlyErrors[keyof QueryRunReadOnlyErrors];
+
+export type QueryRunReadOnlyResponses = {
+    200: QueryResponse;
+};
+
+export type QueryRunReadOnlyResponse = QueryRunReadOnlyResponses[keyof QueryRunReadOnlyResponses];
+
 export type QueryRunData = {
     body: {
         sql: string;
@@ -1414,15 +1367,7 @@ export type QueryRunData = {
     path?: never;
     query?: {
         /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required only when the organization has multiple clusters.
-         */
-        cluster?: string;
-        /**
-         * Database to use. Also accepted as the x-rawtree-database header. Defaults to the API key's database, or default for user and OAuth sessions.
+         * Database to use. Defaults to the API key's database, or default for user sessions and OAuth tokens.
          */
         database?: string;
     };
@@ -1455,16 +1400,7 @@ export type QueryFormatData = {
         sql: string;
     };
     path?: never;
-    query?: {
-        /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required only when the organization has multiple clusters.
-         */
-        cluster?: string;
-    };
+    query?: never;
     url: '/v1/query-format';
 };
 
@@ -1530,14 +1466,6 @@ export type SplSearchData = {
     path?: never;
     query?: {
         /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required only when the organization has multiple clusters.
-         */
-        cluster?: string;
-        /**
          * Database containing splunk_events. Database-bound API keys may omit this parameter.
          */
         database?: string;
@@ -1568,15 +1496,7 @@ export type TablesListData = {
     path?: never;
     query?: {
         /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required only when the organization has multiple clusters.
-         */
-        cluster?: string;
-        /**
-         * Database to use. Also accepted as the x-rawtree-database header. Defaults to the API key's database, or default for user and OAuth sessions.
+         * Database to use. Defaults to the API key's database, or default for user sessions and OAuth tokens.
          */
         database?: string;
     };
@@ -1621,15 +1541,7 @@ export type TablesCreateData = {
     path?: never;
     query?: {
         /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required only when the organization has multiple clusters.
-         */
-        cluster?: string;
-        /**
-         * Database to use. Also accepted as the x-rawtree-database header. Defaults to the API key's database, or default for user and OAuth sessions.
+         * Database to use. Defaults to the API key's database, or default for user sessions and OAuth tokens.
          */
         database?: string;
     };
@@ -1661,15 +1573,7 @@ export type TablesDeleteData = {
     };
     query?: {
         /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required only when the organization has multiple clusters.
-         */
-        cluster?: string;
-        /**
-         * Database to use. Also accepted as the x-rawtree-database header. Defaults to the API key's database, or default for user and OAuth sessions.
+         * Database to use. Defaults to the API key's database, or default for user sessions and OAuth tokens.
          */
         database?: string;
     };
@@ -1700,15 +1604,7 @@ export type TablesDescribeData = {
     };
     query?: {
         /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required only when the organization has multiple clusters.
-         */
-        cluster?: string;
-        /**
-         * Database to use. Also accepted as the x-rawtree-database header. Defaults to the API key's database, or default for user and OAuth sessions.
+         * Database to use. Defaults to the API key's database, or default for user sessions and OAuth tokens.
          */
         database?: string;
     };
@@ -1718,6 +1614,11 @@ export type TablesDescribeData = {
 export type TablesDescribeErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    403: ErrorResponse;
+    /**
+     * No visible table with this name in the selected database
+     */
+    404: ErrorResponse;
 };
 
 export type TablesDescribeError = TablesDescribeErrors[keyof TablesDescribeErrors];
@@ -1753,15 +1654,7 @@ export type TablesUpdateData = {
     };
     query?: {
         /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required only when the organization has multiple clusters.
-         */
-        cluster?: string;
-        /**
-         * Database to use. Also accepted as the x-rawtree-database header. Defaults to the API key's database, or default for user and OAuth sessions.
+         * Database to use. Defaults to the API key's database, or default for user sessions and OAuth tokens.
          */
         database?: string;
     };
@@ -1787,7 +1680,7 @@ export type TablesUpdateResponse = TablesUpdateResponses[keyof TablesUpdateRespo
 
 export type TablesInsertData = {
     /**
-     * A single JSON object or array of objects. Mutually exclusive with the 'url' query parameter.
+     * A single JSON object or array of objects. Mutually exclusive with the 'url' query parameter. With transform=firehose, the body is the Amazon Data Firehose HTTP endpoint request: an object with requestId and records, each record carrying base64-encoded data.
      */
     body?: null | InsertBody;
     path: {
@@ -1806,15 +1699,7 @@ export type TablesInsertData = {
          */
         transform?: string;
         /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required only when the organization has multiple clusters.
-         */
-        cluster?: string;
-        /**
-         * Database to use. Also accepted as the x-rawtree-database header. Defaults to the API key's database, or default for user and OAuth sessions.
+         * Database to use. Defaults to the API key's database, or default for user sessions and OAuth tokens.
          */
         database?: string;
         /**
@@ -1850,7 +1735,7 @@ export type TablesInsertResponses = {
     /**
      * Normal JSON body mode returns native database summary fields plus legacy inserted (null if unavailable). Transformed JSON returns {inserted}. Firehose transform returns FirehoseInsertResponse ({requestId,timestamp}). URL mode returns JSON {inserted}; inserted is null when unavailable. The ClickHouse query ID is returned in X-ClickHouse-Query-Id.
      */
-    200: InsertResponse;
+    200: InsertSuccessResponse;
 };
 
 export type TablesInsertResponse = TablesInsertResponses[keyof TablesInsertResponses];
@@ -1865,15 +1750,7 @@ export type TablesSettingsGetData = {
     };
     query?: {
         /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required only when the organization has multiple clusters.
-         */
-        cluster?: string;
-        /**
-         * Database to use. Also accepted as the x-rawtree-database header. Defaults to the API key's database, or default for user and OAuth sessions.
+         * Database to use. Defaults to the API key's database, or default for user sessions and OAuth tokens.
          */
         database?: string;
     };
@@ -1900,15 +1777,7 @@ export type TablesSettingsUpdateData = {
     };
     query?: {
         /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required only when the organization has multiple clusters.
-         */
-        cluster?: string;
-        /**
-         * Database to use. Also accepted as the x-rawtree-database header. Defaults to the API key's database, or default for user and OAuth sessions.
+         * Database to use. Defaults to the API key's database, or default for user sessions and OAuth tokens.
          */
         database?: string;
     };
@@ -1924,16 +1793,7 @@ export type TablesSettingsUpdateResponse = TablesSettingsUpdateResponses[keyof T
 export type WorkflowsListData = {
     body?: never;
     path?: never;
-    query?: {
-        /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required for user and OAuth sessions.
-         */
-        cluster?: string;
-    };
+    query?: never;
     url: '/v1/workflows';
 };
 
@@ -1962,16 +1822,7 @@ export type WorkflowsCreateData = {
         sinks?: Array<SinkInput>;
     };
     path?: never;
-    query?: {
-        /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required for user and OAuth sessions.
-         */
-        cluster?: string;
-    };
+    query?: never;
     url: '/v1/workflows';
 };
 
@@ -1996,16 +1847,7 @@ export type WorkflowsDeleteData = {
     path: {
         workflow_id: string;
     };
-    query?: {
-        /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required for user and OAuth sessions.
-         */
-        cluster?: string;
-    };
+    query?: never;
     url: '/v1/workflows/{workflow_id}';
 };
 
@@ -2031,16 +1873,7 @@ export type WorkflowsGetData = {
     path: {
         workflow_id: string;
     };
-    query?: {
-        /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required for user and OAuth sessions.
-         */
-        cluster?: string;
-    };
+    query?: never;
     url: '/v1/workflows/{workflow_id}';
 };
 
@@ -2072,16 +1905,7 @@ export type WorkflowsUpdateData = {
     path: {
         workflow_id: string;
     };
-    query?: {
-        /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required for user and OAuth sessions.
-         */
-        cluster?: string;
-    };
+    query?: never;
     url: '/v1/workflows/{workflow_id}';
 };
 
@@ -2108,14 +1932,6 @@ export type WorkflowsLogsListData = {
         workflow_id: string;
     };
     query?: {
-        /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string | null;
-        /**
-         * Cluster name. Required for user and OAuth sessions.
-         */
-        cluster?: string | null;
         /**
          * Inclusive Unix milliseconds. Defaults to the last 24 hours.
          */
@@ -2151,14 +1967,6 @@ export type WorkflowsRunsListData = {
         workflow_id: string;
     };
     query?: {
-        /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required for user and OAuth sessions.
-         */
-        cluster?: string;
         /**
          * Maximum runs per page. Defaults to 20; accepts 1–100.
          */
@@ -2202,16 +2010,7 @@ export type WorkflowsRunsCreateData = {
     path: {
         workflow_id: string;
     };
-    query?: {
-        /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required for user and OAuth sessions.
-         */
-        cluster?: string;
-    };
+    query?: never;
     url: '/v1/workflows/{workflow_id}/runs';
 };
 
@@ -2237,16 +2036,7 @@ export type WorkflowsRunsCancelData = {
         workflow_id: string;
         run_id: string;
     };
-    query?: {
-        /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required for user and OAuth sessions.
-         */
-        cluster?: string;
-    };
+    query?: never;
     url: '/v1/workflows/{workflow_id}/runs/{run_id}/cancel';
 };
 
@@ -2297,16 +2087,7 @@ export type WorkflowsSinksCreateData = {
     path: {
         workflow_id: string;
     };
-    query?: {
-        /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required for user and OAuth sessions.
-         */
-        cluster?: string;
-    };
+    query?: never;
     url: '/v1/workflows/{workflow_id}/sinks';
 };
 
@@ -2333,16 +2114,7 @@ export type WorkflowsSinksDeleteData = {
         workflow_id: string;
         sink_id: string;
     };
-    query?: {
-        /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required for user and OAuth sessions.
-         */
-        cluster?: string;
-    };
+    query?: never;
     url: '/v1/workflows/{workflow_id}/sinks/{sink_id}';
 };
 
@@ -2376,16 +2148,7 @@ export type WorkflowsSinksUpdateData = {
         workflow_id: string;
         sink_id: string;
     };
-    query?: {
-        /**
-         * Organization name. Required for user and OAuth sessions.
-         */
-        organization?: string;
-        /**
-         * Cluster name. Required for user and OAuth sessions.
-         */
-        cluster?: string;
-    };
+    query?: never;
     url: '/v1/workflows/{workflow_id}/sinks/{sink_id}';
 };
 

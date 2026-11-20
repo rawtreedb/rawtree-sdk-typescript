@@ -2,7 +2,7 @@
 
 import { client } from './client.gen.js';
 import { buildClientParams, type Client, type ClientMeta, type Options as Options2, type RequestResult, type TDataShape } from './client/index.js';
-import type { ActorType, ApiKeysCreateErrors, ApiKeysCreateResponses, ApiKeysDeleteErrors, ApiKeysDeleteResponses, ApiKeysListErrors, ApiKeysListResponses, Category, ClustersListErrors, ClustersListResponses, DatabasesCreateErrors, DatabasesCreateResponses, DatabasesDeleteErrors, DatabasesDeleteResponses, DatabasesListErrors, DatabasesListResponses, DatabasesVerifyS3AccessErrors, DatabasesVerifyS3AccessResponses, FeedbackSubmitErrors, FeedbackSubmitResponses, HandlersCreateErrors, HandlersCreateResponses, HandlersInvokeErrors, HandlersInvokeResponses, HandlersListErrors, HandlersListResponses, HealthCheckErrors, HealthCheckResponses, HttpSinkSettingsInput, InsertBody, LogsListErrors, LogsListResponses, OrganizationsListErrors, OrganizationsListResponses, PermissionLevel, PrincipalType, QueryFormatErrors, QueryFormatResponses, QueryRunErrors, QueryRunResponses, S3StorageInput, SinkInput, SinkType, SlackSinkSettingsInput, SlackSinkSettingsPatch, SplCapabilitiesResponses, SplSearchErrors, SplSearchResponses, TablesCreateErrors, TablesCreateResponses, TablesDeleteErrors, TablesDeleteResponses, TablesDescribeErrors, TablesDescribeResponses, TableSettingValue, TableSinkSettings, TableSinkSettingsPatch, TablesInsertErrors, TablesInsertResponses, TablesListErrors, TablesListResponses, TablesSettingsGetResponses, TablesSettingsUpdateResponses, TablesUpdateErrors, TablesUpdateResponses, UpdateWorkflowQuery, UpdateWorkflowSchedule, WorkflowQuery, WorkflowSchedule, WorkflowsCreateErrors, WorkflowsCreateResponses, WorkflowsDeleteErrors, WorkflowsDeleteResponses, WorkflowsGetErrors, WorkflowsGetResponses, WorkflowsListErrors, WorkflowsListResponses, WorkflowsLogsListErrors, WorkflowsLogsListResponses, WorkflowsRunsCancelErrors, WorkflowsRunsCancelResponses, WorkflowsRunsCreateErrors, WorkflowsRunsCreateResponses, WorkflowsRunsListErrors, WorkflowsRunsListResponses, WorkflowsSinksCreateErrors, WorkflowsSinksCreateResponses, WorkflowsSinksDeleteErrors, WorkflowsSinksDeleteResponses, WorkflowsSinksUpdateErrors, WorkflowsSinksUpdateResponses, WorkflowsUpdateErrors, WorkflowsUpdateResponses } from './types.gen.js';
+import type { ActorType, ApiKeysCreateErrors, ApiKeysCreateResponses, ApiKeysDeleteErrors, ApiKeysDeleteResponses, ApiKeysListErrors, ApiKeysListResponses, Category, ClustersListErrors, ClustersListResponses, DatabasesCreateErrors, DatabasesCreateResponses, DatabasesDeleteErrors, DatabasesDeleteResponses, DatabasesListErrors, DatabasesListResponses, DatabasesVerifyS3AccessErrors, DatabasesVerifyS3AccessResponses, FeedbackSubmitErrors, FeedbackSubmitResponses, HandlersCreateErrors, HandlersCreateResponses, HandlersInvokeErrors, HandlersInvokeResponses, HandlersListErrors, HandlersListResponses, HealthCheckErrors, HealthCheckResponses, HttpSinkSettingsInput, InsertBody, LogsListErrors, LogsListResponses, OrganizationsListErrors, OrganizationsListResponses, PermissionLevel, PrincipalType, QueryFormatErrors, QueryFormatResponses, QueryRunErrors, QueryRunReadOnlyErrors, QueryRunReadOnlyResponses, QueryRunResponses, S3StorageInput, SinkInput, SinkType, SlackSinkSettingsInput, SlackSinkSettingsPatch, SplCapabilitiesResponses, SplSearchErrors, SplSearchResponses, TablesCreateErrors, TablesCreateResponses, TablesDeleteErrors, TablesDeleteResponses, TablesDescribeErrors, TablesDescribeResponses, TableSettingValue, TableSinkSettings, TableSinkSettingsPatch, TablesInsertErrors, TablesInsertResponses, TablesListErrors, TablesListResponses, TablesSettingsGetResponses, TablesSettingsUpdateResponses, TablesUpdateErrors, TablesUpdateResponses, UpdateWorkflowQuery, UpdateWorkflowSchedule, WorkflowQuery, WorkflowSchedule, WorkflowsCreateErrors, WorkflowsCreateResponses, WorkflowsDeleteErrors, WorkflowsDeleteResponses, WorkflowsGetErrors, WorkflowsGetResponses, WorkflowsListErrors, WorkflowsListResponses, WorkflowsLogsListErrors, WorkflowsLogsListResponses, WorkflowsRunsCancelErrors, WorkflowsRunsCancelResponses, WorkflowsRunsCreateErrors, WorkflowsRunsCreateResponses, WorkflowsRunsListErrors, WorkflowsRunsListResponses, WorkflowsSinksCreateErrors, WorkflowsSinksCreateResponses, WorkflowsSinksDeleteErrors, WorkflowsSinksDeleteResponses, WorkflowsSinksUpdateErrors, WorkflowsSinksUpdateResponses, WorkflowsUpdateErrors, WorkflowsUpdateResponses } from './types.gen.js';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -59,16 +59,130 @@ export class Health extends HeyApiClient {
     }
 }
 
+export class ApiKeys extends HeyApiClient {
+    /**
+     * List all API keys for a cluster
+     */
+    public list<ThrowOnError extends boolean = true>(options?: Options<never, ThrowOnError>): RequestResult<ApiKeysListResponses, ApiKeysListErrors, ThrowOnError, 'data'> {
+        return (options?.client ?? this.client).get<ApiKeysListResponses, ApiKeysListErrors, ThrowOnError, 'data'>({
+            responseStyle: 'data',
+            security: [
+                {
+                    key: 'apiKeyAuth',
+                    scheme: 'bearer',
+                    type: 'http'
+                },
+                {
+                    key: 'bearerAuth',
+                    scheme: 'bearer',
+                    type: 'http'
+                },
+                {
+                    key: 'oauth2',
+                    scheme: 'bearer',
+                    type: 'http'
+                }
+            ],
+            url: '/v1/api-keys',
+            ...options
+        });
+    }
+    
+    /**
+     * Create a new API key for a cluster
+     *
+     * principal_type and principal_id must be supplied together. User-authenticated requests default to the current user; only that user or an organization service account may be selected. Service-account assignment requires organization admin access. Admin API-key callers inherit their existing principal and cannot select another. Provide exactly one of permission or database_roles. Legacy permission keys are unchanged. Custom keys require administrator access and existing roles on this cluster; they support query execution, cancellation, and inserts into existing tables. Database roles do not grant RawTree management permissions.
+     */
+    public create<ThrowOnError extends boolean = true>(parameters: {
+        database?: string;
+        principal_type?: null | PrincipalType;
+        principal_id?: string | null;
+        expires_at?: string | null;
+        name: string;
+        permission?: null | PermissionLevel;
+        database_roles?: Array<string> | null;
+    }, options?: Options<never, ThrowOnError>): RequestResult<ApiKeysCreateResponses, ApiKeysCreateErrors, ThrowOnError, 'data'> {
+        const params = buildClientParams([parameters], [{ args: [
+                    { in: 'query', key: 'database' },
+                    { in: 'body', key: 'principal_type' },
+                    { in: 'body', key: 'principal_id' },
+                    { in: 'body', key: 'expires_at' },
+                    { in: 'body', key: 'name' },
+                    { in: 'body', key: 'permission' },
+                    { in: 'body', key: 'database_roles' }
+                ] }]);
+        return (options?.client ?? this.client).post<ApiKeysCreateResponses, ApiKeysCreateErrors, ThrowOnError, 'data'>({
+            responseStyle: 'data',
+            security: [
+                {
+                    key: 'apiKeyAuth',
+                    scheme: 'bearer',
+                    type: 'http'
+                },
+                {
+                    key: 'bearerAuth',
+                    scheme: 'bearer',
+                    type: 'http'
+                },
+                {
+                    key: 'oauth2',
+                    scheme: 'bearer',
+                    type: 'http'
+                }
+            ],
+            url: '/v1/api-keys',
+            ...options,
+            ...params,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options?.headers,
+                ...params.headers
+            }
+        });
+    }
+    
+    /**
+     * Permanently delete an API key (cannot be undone)
+     *
+     * Permanently revokes and deletes the specified API key. This action cannot be undone. Any key can be deleted, including the last admin key. The `{id}` path segment must be the API key UUID.
+     */
+    public delete<ThrowOnError extends boolean = true>(parameters: {
+        id: string;
+    }, options?: Options<never, ThrowOnError>): RequestResult<ApiKeysDeleteResponses, ApiKeysDeleteErrors, ThrowOnError, 'data'> {
+        const params = buildClientParams([parameters], [{ args: [{ in: 'path', key: 'id' }] }]);
+        return (options?.client ?? this.client).delete<ApiKeysDeleteResponses, ApiKeysDeleteErrors, ThrowOnError, 'data'>({
+            responseStyle: 'data',
+            security: [
+                {
+                    key: 'apiKeyAuth',
+                    scheme: 'bearer',
+                    type: 'http'
+                },
+                {
+                    key: 'bearerAuth',
+                    scheme: 'bearer',
+                    type: 'http'
+                },
+                {
+                    key: 'oauth2',
+                    scheme: 'bearer',
+                    type: 'http'
+                }
+            ],
+            url: '/v1/api-keys/{id}',
+            ...options,
+            ...params
+        });
+    }
+}
+
 export class Clusters extends HeyApiClient {
     /**
      * List permanent clusters and their current status
      *
      * User credentials list clusters in the selected organization. API keys receive the same details for their bound cluster.
      */
-    public list<ThrowOnError extends boolean = true>(parameters?: {
-        organization?: string;
-    }, options?: Options<never, ThrowOnError>): RequestResult<ClustersListResponses, ClustersListErrors, ThrowOnError, 'data'> {
-        const params = buildClientParams([parameters], [{ args: [{ in: 'query', key: 'organization' }] }]);
+    public list<ThrowOnError extends boolean = true>(options?: Options<never, ThrowOnError>): RequestResult<ClustersListResponses, ClustersListErrors, ThrowOnError, 'data'> {
         return (options?.client ?? this.client).get<ClustersListResponses, ClustersListErrors, ThrowOnError, 'data'>({
             responseStyle: 'data',
             security: [
@@ -89,8 +203,7 @@ export class Clusters extends HeyApiClient {
                 }
             ],
             url: '/v1/clusters',
-            ...options,
-            ...params
+            ...options
         });
     }
 }
@@ -99,11 +212,7 @@ export class Databases extends HeyApiClient {
     /**
      * List databases in an organization
      */
-    public list<ThrowOnError extends boolean = true>(parameters?: {
-        organization?: string;
-        cluster?: string;
-    }, options?: Options<never, ThrowOnError>): RequestResult<DatabasesListResponses, DatabasesListErrors, ThrowOnError, 'data'> {
-        const params = buildClientParams([parameters], [{ args: [{ in: 'query', key: 'organization' }, { in: 'query', key: 'cluster' }] }]);
+    public list<ThrowOnError extends boolean = true>(options?: Options<never, ThrowOnError>): RequestResult<DatabasesListResponses, DatabasesListErrors, ThrowOnError, 'data'> {
         return (options?.client ?? this.client).get<DatabasesListResponses, DatabasesListErrors, ThrowOnError, 'data'>({
             responseStyle: 'data',
             security: [
@@ -124,8 +233,7 @@ export class Databases extends HeyApiClient {
                 }
             ],
             url: '/v1/databases',
-            ...options,
-            ...params
+            ...options
         });
     }
     
@@ -133,17 +241,10 @@ export class Databases extends HeyApiClient {
      * Create a database in an organization
      */
     public create<ThrowOnError extends boolean = true>(parameters: {
-        organization?: string;
-        cluster?: string;
         name: string;
         s3_storage?: null | S3StorageInput;
     }, options?: Options<never, ThrowOnError>): RequestResult<DatabasesCreateResponses, DatabasesCreateErrors, ThrowOnError, 'data'> {
-        const params = buildClientParams([parameters], [{ args: [
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' },
-                    { in: 'body', key: 'name' },
-                    { in: 'body', key: 's3_storage' }
-                ] }]);
+        const params = buildClientParams([parameters], [{ args: [{ in: 'body', key: 'name' }, { in: 'body', key: 's3_storage' }] }]);
         return (options?.client ?? this.client).post<DatabasesCreateResponses, DatabasesCreateErrors, ThrowOnError, 'data'>({
             responseStyle: 'data',
             security: [
@@ -178,17 +279,10 @@ export class Databases extends HeyApiClient {
      * Verify customer-owned S3 access for a database
      */
     public verifyS3Access<ThrowOnError extends boolean = true>(parameters: {
-        organization?: string;
-        cluster?: string;
         name: string;
         s3_storage?: null | S3StorageInput;
     }, options?: Options<never, ThrowOnError>): RequestResult<DatabasesVerifyS3AccessResponses, DatabasesVerifyS3AccessErrors, ThrowOnError, 'data'> {
-        const params = buildClientParams([parameters], [{ args: [
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' },
-                    { in: 'body', key: 'name' },
-                    { in: 'body', key: 's3_storage' }
-                ] }]);
+        const params = buildClientParams([parameters], [{ args: [{ in: 'body', key: 'name' }, { in: 'body', key: 's3_storage' }] }]);
         return (options?.client ?? this.client).post<DatabasesVerifyS3AccessResponses, DatabasesVerifyS3AccessErrors, ThrowOnError, 'data'>({
             responseStyle: 'data',
             security: [
@@ -224,14 +318,8 @@ export class Databases extends HeyApiClient {
      */
     public delete<ThrowOnError extends boolean = true>(parameters: {
         database: string;
-        organization?: string;
-        cluster?: string;
     }, options?: Options<never, ThrowOnError>): RequestResult<DatabasesDeleteResponses, DatabasesDeleteErrors, ThrowOnError, 'data'> {
-        const params = buildClientParams([parameters], [{ args: [
-                    { in: 'path', key: 'database' },
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' }
-                ] }]);
+        const params = buildClientParams([parameters], [{ args: [{ in: 'path', key: 'database' }] }]);
         return (options?.client ?? this.client).delete<DatabasesDeleteResponses, DatabasesDeleteErrors, ThrowOnError, 'data'>({
             responseStyle: 'data',
             security: [
@@ -318,10 +406,9 @@ export class Handlers extends HeyApiClient {
      * List handlers in the selected cluster
      */
     public list<ThrowOnError extends boolean = true>(parameters?: {
-        organization?: string;
-        cluster?: string;
+        database?: string;
     }, options?: Options<never, ThrowOnError>): RequestResult<HandlersListResponses, HandlersListErrors, ThrowOnError, 'data'> {
-        const params = buildClientParams([parameters], [{ args: [{ in: 'query', key: 'organization' }, { in: 'query', key: 'cluster' }] }]);
+        const params = buildClientParams([parameters], [{ args: [{ in: 'query', key: 'database' }] }]);
         return (options?.client ?? this.client).get<HandlersListResponses, HandlersListErrors, ThrowOnError, 'data'>({
             responseStyle: 'data',
             security: [
@@ -351,15 +438,13 @@ export class Handlers extends HeyApiClient {
      * Create a GET handler across the selected cluster
      */
     public create<ThrowOnError extends boolean = true>(parameters: {
-        organization?: string;
-        cluster?: string;
+        database?: string;
         name: string;
         url: string;
         sql: string;
     }, options?: Options<never, ThrowOnError>): RequestResult<HandlersCreateResponses, HandlersCreateErrors, ThrowOnError, 'data'> {
         const params = buildClientParams([parameters], [{ args: [
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' },
+                    { in: 'query', key: 'database' },
                     { in: 'body', key: 'name' },
                     { in: 'body', key: 'url' },
                     { in: 'body', key: 'sql' }
@@ -396,16 +481,9 @@ export class Handlers extends HeyApiClient {
     
     public invoke<ThrowOnError extends boolean = true>(parameters: {
         path: string;
-        organization?: string;
-        cluster?: string;
         database?: string;
     }, options?: Options<never, ThrowOnError>): RequestResult<HandlersInvokeResponses, HandlersInvokeErrors, ThrowOnError, 'data'> {
-        const params = buildClientParams([parameters], [{ args: [
-                    { in: 'path', key: 'path' },
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' },
-                    { in: 'query', key: 'database' }
-                ] }]);
+        const params = buildClientParams([parameters], [{ args: [{ in: 'path', key: 'path' }, { in: 'query', key: 'database' }] }]);
         return (options?.client ?? this.client).get<HandlersInvokeResponses, HandlersInvokeErrors, ThrowOnError, 'data'>({
             responseStyle: 'data',
             security: [
@@ -432,138 +510,6 @@ export class Handlers extends HeyApiClient {
     }
 }
 
-export class ApiKeys extends HeyApiClient {
-    /**
-     * List all API keys for a cluster
-     */
-    public list<ThrowOnError extends boolean = true>(parameters?: {
-        organization?: string;
-        cluster?: string;
-    }, options?: Options<never, ThrowOnError>): RequestResult<ApiKeysListResponses, ApiKeysListErrors, ThrowOnError, 'data'> {
-        const params = buildClientParams([parameters], [{ args: [{ in: 'query', key: 'organization' }, { in: 'query', key: 'cluster' }] }]);
-        return (options?.client ?? this.client).get<ApiKeysListResponses, ApiKeysListErrors, ThrowOnError, 'data'>({
-            responseStyle: 'data',
-            security: [
-                {
-                    key: 'apiKeyAuth',
-                    scheme: 'bearer',
-                    type: 'http'
-                },
-                {
-                    key: 'bearerAuth',
-                    scheme: 'bearer',
-                    type: 'http'
-                },
-                {
-                    key: 'oauth2',
-                    scheme: 'bearer',
-                    type: 'http'
-                }
-            ],
-            url: '/v1/keys',
-            ...options,
-            ...params
-        });
-    }
-    
-    /**
-     * Create a new API key for a cluster
-     *
-     * principal_type and principal_id must be supplied together. User-authenticated requests default to the current user; only that user or an organization service account may be selected. Service-account assignment requires organization admin access. Admin API-key callers inherit their existing principal and cannot select another. Provide exactly one of permission or database_roles. Legacy permission keys are unchanged. Custom keys require administrator access and existing roles on this cluster; they support query execution, cancellation, and inserts into existing tables. Database roles do not grant RawTree management permissions.
-     */
-    public create<ThrowOnError extends boolean = true>(parameters: {
-        organization?: string;
-        cluster?: string;
-        database?: string;
-        principal_type?: null | PrincipalType;
-        principal_id?: string | null;
-        expires_at?: string | null;
-        name: string;
-        permission?: null | PermissionLevel;
-        database_roles?: Array<string> | null;
-    }, options?: Options<never, ThrowOnError>): RequestResult<ApiKeysCreateResponses, ApiKeysCreateErrors, ThrowOnError, 'data'> {
-        const params = buildClientParams([parameters], [{ args: [
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' },
-                    { in: 'query', key: 'database' },
-                    { in: 'body', key: 'principal_type' },
-                    { in: 'body', key: 'principal_id' },
-                    { in: 'body', key: 'expires_at' },
-                    { in: 'body', key: 'name' },
-                    { in: 'body', key: 'permission' },
-                    { in: 'body', key: 'database_roles' }
-                ] }]);
-        return (options?.client ?? this.client).post<ApiKeysCreateResponses, ApiKeysCreateErrors, ThrowOnError, 'data'>({
-            responseStyle: 'data',
-            security: [
-                {
-                    key: 'apiKeyAuth',
-                    scheme: 'bearer',
-                    type: 'http'
-                },
-                {
-                    key: 'bearerAuth',
-                    scheme: 'bearer',
-                    type: 'http'
-                },
-                {
-                    key: 'oauth2',
-                    scheme: 'bearer',
-                    type: 'http'
-                }
-            ],
-            url: '/v1/keys',
-            ...options,
-            ...params,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options?.headers,
-                ...params.headers
-            }
-        });
-    }
-    
-    /**
-     * Permanently delete an API key (cannot be undone)
-     *
-     * Permanently revokes and deletes the specified API key. This action cannot be undone. Any key can be deleted, including the last admin key. The `{id_or_token}` path segment accepts either a key UUID (`id`) or the full API key token (`token`, for example `rt_...`).
-     */
-    public delete<ThrowOnError extends boolean = true>(parameters: {
-        id_or_token: string;
-        organization?: string;
-        cluster?: string;
-    }, options?: Options<never, ThrowOnError>): RequestResult<ApiKeysDeleteResponses, ApiKeysDeleteErrors, ThrowOnError, 'data'> {
-        const params = buildClientParams([parameters], [{ args: [
-                    { in: 'path', key: 'id_or_token' },
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' }
-                ] }]);
-        return (options?.client ?? this.client).delete<ApiKeysDeleteResponses, ApiKeysDeleteErrors, ThrowOnError, 'data'>({
-            responseStyle: 'data',
-            security: [
-                {
-                    key: 'apiKeyAuth',
-                    scheme: 'bearer',
-                    type: 'http'
-                },
-                {
-                    key: 'bearerAuth',
-                    scheme: 'bearer',
-                    type: 'http'
-                },
-                {
-                    key: 'oauth2',
-                    scheme: 'bearer',
-                    type: 'http'
-                }
-            ],
-            url: '/v1/keys/{id_or_token}',
-            ...options,
-            ...params
-        });
-    }
-}
-
 export class Logs extends HeyApiClient {
     /**
      * List platform API request logs
@@ -583,8 +529,6 @@ export class Logs extends HeyApiClient {
         end_time?: string;
         limit?: number;
         offset?: number;
-        organization?: string;
-        cluster?: string;
     }, options?: Options<never, ThrowOnError>): RequestResult<LogsListResponses, LogsListErrors, ThrowOnError, 'data'> {
         const params = buildClientParams([parameters], [{ args: [
                     { in: 'query', key: 'search' },
@@ -600,9 +544,7 @@ export class Logs extends HeyApiClient {
                     { in: 'query', key: 'start_time' },
                     { in: 'query', key: 'end_time' },
                     { in: 'query', key: 'limit' },
-                    { in: 'query', key: 'offset' },
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' }
+                    { in: 'query', key: 'offset' }
                 ] }]);
         return (options?.client ?? this.client).get<LogsListResponses, LogsListErrors, ThrowOnError, 'data'>({
             responseStyle: 'data',
@@ -656,21 +598,51 @@ export class Organizations extends HeyApiClient {
 
 export class Query extends HeyApiClient {
     /**
+     * Execute a read-only SQL query passed as URL parameters
+     *
+     * Runs SELECT, WITH, EXPLAIN, and DESCRIBE queries with the same parameters, formats, and responses as `POST /v1/query`. Statements that create, change, or remove data or configuration (including `SELECT ... CACHE INTO`) are rejected; send them with `POST /v1/query`. The SQL is part of the URL, so proxies and access logs may record it; use `POST /v1/query` for queries with sensitive literals.
+     */
+    public runReadOnly<ThrowOnError extends boolean = true>(parameters: {
+        sql: string;
+        query_id?: string;
+        format?: string;
+        database?: string;
+    }, options?: Options<never, ThrowOnError>): RequestResult<QueryRunReadOnlyResponses, QueryRunReadOnlyErrors, ThrowOnError, 'data'> {
+        const params = buildClientParams([parameters], [{ args: [
+                    { in: 'query', key: 'sql' },
+                    { in: 'query', key: 'query_id' },
+                    { in: 'query', key: 'format' },
+                    { in: 'query', key: 'database' }
+                ] }]);
+        return (options?.client ?? this.client).get<QueryRunReadOnlyResponses, QueryRunReadOnlyErrors, ThrowOnError, 'data'>({
+            responseStyle: 'data',
+            security: [{
+                    key: 'apiKeyAuth',
+                    scheme: 'bearer',
+                    type: 'http'
+                }, {
+                    key: 'oauth2',
+                    scheme: 'bearer',
+                    type: 'http'
+                }],
+            url: '/v1/query',
+            ...options,
+            ...params
+        });
+    }
+    
+    /**
      * Execute SQL query and return results in the requested ClickHouse format
      *
-     * Accepts read-only queries, `TRUNCATE TABLE [IF EXISTS] [database.]<table> [SYNC]` to remove all rows while preserving table configuration (requires write permission and always waits for replicas), `ALTER TABLE [database.]<table> MODIFY ORDER BY (...)` to change a table sorting key, `ALTER TABLE [database.]<table> MODIFY TTL <expression> [DELETE [WHERE <condition>]]` to set or replace row retention, `ALTER TABLE [database.]<table> MODIFY SETTING name = value, ...` and `RESET SETTING name, ...` to configure engine-supported table settings, `ALTER TABLE [database.]<table> ADD PROJECTION [IF NOT EXISTS] <name> (SELECT ...)`, `MATERIALIZE PROJECTION [IF EXISTS] <name>`, `CLEAR PROJECTION [IF EXISTS] <name>`, and `DROP PROJECTION [IF EXISTS] <name>` to manage projections, `ADD INDEX [IF NOT EXISTS] <name> <expression> TYPE <type> [GRANULARITY <n>]`, `MATERIALIZE INDEX [IF EXISTS] <name>`, `CLEAR INDEX [IF EXISTS] <name>`, and `DROP INDEX [IF EXISTS] <name>` to manage indexes (including text indexes), `KILL MUTATION WHERE table = '<table>' [AND mutation_id = '<id>']` to stop a running projection or index materialization or clear in the selected database, `INSERT INTO [database.]<table> [(columns)] SELECT ...` to materialize query results into an existing table, and `CREATE TABLE [IF NOT EXISTS] [database.]<table> ENGINE = ReplicatedRawMergeTree [ORDER BY (...)] [TTL <expression> [DELETE [WHERE <condition>]]] [SETTINGS name = value, ...]` to create a table in the selected user database. ALTER and KILL MUTATION require the same authorization as updating table configuration, and CREATE TABLE the same as creating a table. Unsupported CREATE TABLE statements are rejected with a supported query in the hint. INSERT requires read and write permission, reads only from tables, and reports `statistics.written_rows`. Organization administrators and admin API keys may also CREATE ROLE, DROP ROLE [IF EXISTS], and GRANT SELECT or INSERT on explicitly qualified tables to existing roles; these operations apply to the selected cluster. Administrators may CREATE NAMED COLLECTION [IF NOT EXISTS] <name> [ON CLUSTER default] AS key = literal [NOT OVERRIDABLE | OVERRIDABLE], ... . Only string, numeric, and boolean literals are supported. ON CLUSTER default is passed through with native database semantics; distributed DDL exposes collection values in system.distributed_ddl_queue. Collection use permissions are managed separately; ALTER and DROP NAMED COLLECTION are unsupported. Other DCL and delegation options are not accepted. Administrators may manage WORKLOAD and RESOURCE definitions with CREATE, CREATE OR REPLACE, and DROP; ON CLUSTER default is optional and must be omitted with Keeper-backed workload storage. Reads and INSERT SELECT can select a workload using SQL SETTINGS workload = 'interactive'. Administrators may use CREATE SETTINGS PROFILE (including OR REPLACE) and DROP SETTINGS PROFILE for workload and use_concurrency_control, optionally READONLY or CONST, assigned to explicit existing database roles; arbitrary settings, users, and inheritance are unsupported. Administrators may CREATE ROW POLICY (including OR REPLACE) and DROP ROW POLICY on one table in the selected user database, with a SELECT filter assigned to explicit existing roles. Only ON CLUSTER default is supported and requires an explicitly qualified database.table target. Row policies filter reads for their target roles; they do not constrain writes or guarantee restrictions on untargeted readers.
+     * Accepts read-only queries, `TRUNCATE TABLE [IF EXISTS] [database.]<table> [SYNC]` to remove all rows while preserving table configuration (requires write permission and always waits for replicas), `ALTER TABLE [database.]<table> MODIFY ORDER BY (...)` to change a table sorting key, `ALTER TABLE [database.]<table> MODIFY TTL <expression> [DELETE [WHERE <condition>]]` to set or replace row retention, `ALTER TABLE [database.]<table> MODIFY SETTING name = value, ...` and `RESET SETTING name, ...` to configure engine-supported table settings, `ALTER TABLE [database.]<table> ADD PROJECTION [IF NOT EXISTS] <name> (SELECT ...)`, `MATERIALIZE PROJECTION [IF EXISTS] <name>`, `CLEAR PROJECTION [IF EXISTS] <name>`, and `DROP PROJECTION [IF EXISTS] <name>` to manage projections, `ADD INDEX [IF NOT EXISTS] <name> <expression> TYPE <type> [GRANULARITY <n>]`, `MATERIALIZE INDEX [IF EXISTS] <name>`, `CLEAR INDEX [IF EXISTS] <name>`, and `DROP INDEX [IF EXISTS] <name>` to manage indexes (including text indexes), `KILL MUTATION WHERE table = '<table>' [AND mutation_id = '<id>']` to stop a running projection or index materialization or clear in the selected database, `INSERT INTO [database.]<table> [(columns)] SELECT ...` to materialize query results into an existing table, `INSERT INTO FUNCTION s3(...) SELECT ...` to export query results to S3, and `CREATE TABLE [IF NOT EXISTS] [database.]<table> ENGINE = ReplicatedRawMergeTree [ORDER BY (...)] [TTL <expression> [DELETE [WHERE <condition>]]] [SETTINGS name = value, ...]` to create a table in the selected user database. ALTER and KILL MUTATION require the same authorization as updating table configuration, and CREATE TABLE the same as creating a table. Unsupported CREATE TABLE statements are rejected with a supported query in the hint. INSERT requires read and write permission, rejects url()/urlCluster() sources, and reports `statistics.written_rows`. Organization administrators and admin API keys may also CREATE ROLE, DROP ROLE [IF EXISTS], and GRANT SELECT or INSERT on explicitly qualified tables to existing roles; these operations apply to the selected cluster. Administrators may CREATE NAMED COLLECTION [IF NOT EXISTS] <name> [ON CLUSTER default] AS key = literal [NOT OVERRIDABLE | OVERRIDABLE], ... . Only string, numeric, and boolean literals are supported. ON CLUSTER default is passed through with native database semantics; distributed DDL exposes collection values in system.distributed_ddl_queue. Collection use permissions are managed separately; ALTER and DROP NAMED COLLECTION are unsupported. Other DCL and delegation options are not accepted. Administrators may manage WORKLOAD and RESOURCE definitions with CREATE, CREATE OR REPLACE, and DROP; ON CLUSTER default is optional and must be omitted with Keeper-backed workload storage. Reads and INSERT SELECT can select a workload using SQL SETTINGS workload = 'interactive'. Administrators may use CREATE SETTINGS PROFILE (including OR REPLACE) and DROP SETTINGS PROFILE for workload and use_concurrency_control, optionally READONLY or CONST, assigned to explicit existing database roles; arbitrary settings, users, and inheritance are unsupported. Administrators may CREATE ROW POLICY (including OR REPLACE) and DROP ROW POLICY on one table in the selected user database, with a SELECT filter assigned to explicit existing roles. Only ON CLUSTER default is supported and requires an explicitly qualified database.table target. Row policies filter reads for their target roles; they do not constrain writes or guarantee restrictions on untargeted readers.
      */
     public run<ThrowOnError extends boolean = true>(parameters: {
-        organization?: string;
-        cluster?: string;
         database?: string;
         sql: string;
         query_id?: string | null;
         format?: string | null;
     }, options?: Options<never, ThrowOnError>): RequestResult<QueryRunResponses, QueryRunErrors, ThrowOnError, 'data'> {
         const params = buildClientParams([parameters], [{ args: [
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' },
                     { in: 'query', key: 'database' },
                     { in: 'body', key: 'sql' },
                     { in: 'body', key: 'query_id' },
@@ -699,15 +671,9 @@ export class Query extends HeyApiClient {
     }
     
     public format<ThrowOnError extends boolean = true>(parameters: {
-        organization?: string;
-        cluster?: string;
         sql: string;
     }, options?: Options<never, ThrowOnError>): RequestResult<QueryFormatResponses, QueryFormatErrors, ThrowOnError, 'data'> {
-        const params = buildClientParams([parameters], [{ args: [
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' },
-                    { in: 'body', key: 'sql' }
-                ] }]);
+        const params = buildClientParams([parameters], [{ args: [{ in: 'body', key: 'sql' }] }]);
         return (options?.client ?? this.client).post<QueryFormatResponses, QueryFormatErrors, ThrowOnError, 'data'>({
             responseStyle: 'data',
             security: [
@@ -755,8 +721,6 @@ export class Spl extends HeyApiClient {
      * Execute the supported SPL v1 subset over splunk_events
      */
     public search<ThrowOnError extends boolean = true>(parameters: {
-        organization?: string;
-        cluster?: string;
         database?: string;
         spl: string;
         query_id?: string | null;
@@ -765,8 +729,6 @@ export class Spl extends HeyApiClient {
         include_field_statistics?: boolean;
     }, options?: Options<never, ThrowOnError>): RequestResult<SplSearchResponses, SplSearchErrors, ThrowOnError, 'data'> {
         const params = buildClientParams([parameters], [{ args: [
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' },
                     { in: 'query', key: 'database' },
                     { in: 'body', key: 'spl' },
                     { in: 'body', key: 'query_id' },
@@ -803,16 +765,9 @@ export class Settings extends HeyApiClient {
      */
     public get<ThrowOnError extends boolean = true>(parameters: {
         table: string;
-        organization?: string;
-        cluster?: string;
         database?: string;
     }, options?: Options<never, ThrowOnError>): RequestResult<TablesSettingsGetResponses, unknown, ThrowOnError, 'data'> {
-        const params = buildClientParams([parameters], [{ args: [
-                    { in: 'path', key: 'table' },
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' },
-                    { in: 'query', key: 'database' }
-                ] }]);
+        const params = buildClientParams([parameters], [{ args: [{ in: 'path', key: 'table' }, { in: 'query', key: 'database' }] }]);
         return (options?.client ?? this.client).get<TablesSettingsGetResponses, unknown, ThrowOnError, 'data'>({
             responseStyle: 'data',
             security: [{
@@ -835,8 +790,6 @@ export class Settings extends HeyApiClient {
      */
     public update<ThrowOnError extends boolean = true>(parameters: {
         table: string;
-        organization?: string;
-        cluster?: string;
         database?: string;
         body: {
             replacing_enable: boolean;
@@ -846,8 +799,6 @@ export class Settings extends HeyApiClient {
     }, options?: Options<never, ThrowOnError>): RequestResult<TablesSettingsUpdateResponses, unknown, ThrowOnError, 'data'> {
         const params = buildClientParams([parameters], [{ args: [
                     { in: 'path', key: 'table' },
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' },
                     { in: 'query', key: 'database' },
                     { key: 'body', map: 'body' }
                 ] }]);
@@ -879,15 +830,9 @@ export class Tables extends HeyApiClient {
      * List all tables in a database
      */
     public list<ThrowOnError extends boolean = true>(parameters?: {
-        organization?: string;
-        cluster?: string;
         database?: string;
     }, options?: Options<never, ThrowOnError>): RequestResult<TablesListResponses, TablesListErrors, ThrowOnError, 'data'> {
-        const params = buildClientParams([parameters], [{ args: [
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' },
-                    { in: 'query', key: 'database' }
-                ] }]);
+        const params = buildClientParams([parameters], [{ args: [{ in: 'query', key: 'database' }] }]);
         return (options?.client ?? this.client).get<TablesListResponses, TablesListErrors, ThrowOnError, 'data'>({
             responseStyle: 'data',
             security: [{
@@ -909,8 +854,6 @@ export class Tables extends HeyApiClient {
      * Create a table in the selected database
      */
     public create<ThrowOnError extends boolean = true>(parameters: {
-        organization?: string;
-        cluster?: string;
         database?: string;
         name: string;
         sorting_key?: string | null;
@@ -920,8 +863,6 @@ export class Tables extends HeyApiClient {
         };
     }, options?: Options<never, ThrowOnError>): RequestResult<TablesCreateResponses, TablesCreateErrors, ThrowOnError, 'data'> {
         const params = buildClientParams([parameters], [{ args: [
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' },
                     { in: 'query', key: 'database' },
                     { in: 'body', key: 'name' },
                     { in: 'body', key: 'sorting_key' },
@@ -955,16 +896,9 @@ export class Tables extends HeyApiClient {
      */
     public delete<ThrowOnError extends boolean = true>(parameters: {
         table: string;
-        organization?: string;
-        cluster?: string;
         database?: string;
     }, options?: Options<never, ThrowOnError>): RequestResult<TablesDeleteResponses, TablesDeleteErrors, ThrowOnError, 'data'> {
-        const params = buildClientParams([parameters], [{ args: [
-                    { in: 'path', key: 'table' },
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' },
-                    { in: 'query', key: 'database' }
-                ] }]);
+        const params = buildClientParams([parameters], [{ args: [{ in: 'path', key: 'table' }, { in: 'query', key: 'database' }] }]);
         return (options?.client ?? this.client).delete<TablesDeleteResponses, TablesDeleteErrors, ThrowOnError, 'data'>({
             responseStyle: 'data',
             security: [{
@@ -987,16 +921,9 @@ export class Tables extends HeyApiClient {
      */
     public describe<ThrowOnError extends boolean = true>(parameters: {
         table: string;
-        organization?: string;
-        cluster?: string;
         database?: string;
     }, options?: Options<never, ThrowOnError>): RequestResult<TablesDescribeResponses, TablesDescribeErrors, ThrowOnError, 'data'> {
-        const params = buildClientParams([parameters], [{ args: [
-                    { in: 'path', key: 'table' },
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' },
-                    { in: 'query', key: 'database' }
-                ] }]);
+        const params = buildClientParams([parameters], [{ args: [{ in: 'path', key: 'table' }, { in: 'query', key: 'database' }] }]);
         return (options?.client ?? this.client).get<TablesDescribeResponses, TablesDescribeErrors, ThrowOnError, 'data'>({
             responseStyle: 'data',
             security: [{
@@ -1019,8 +946,6 @@ export class Tables extends HeyApiClient {
      */
     public update<ThrowOnError extends boolean = true>(parameters: {
         table: string;
-        organization?: string;
-        cluster?: string;
         database?: string;
         sorting_key?: string | null;
         ttl?: string | null;
@@ -1030,8 +955,6 @@ export class Tables extends HeyApiClient {
     }, options?: Options<never, ThrowOnError>): RequestResult<TablesUpdateResponses, TablesUpdateErrors, ThrowOnError, 'data'> {
         const params = buildClientParams([parameters], [{ args: [
                     { in: 'path', key: 'table' },
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' },
                     { in: 'query', key: 'database' },
                     { in: 'body', key: 'sorting_key' },
                     { in: 'body', key: 'ttl' },
@@ -1066,8 +989,6 @@ export class Tables extends HeyApiClient {
         table: string;
         url?: string;
         transform?: string;
-        organization?: string;
-        cluster?: string;
         database?: string;
         query_id?: string;
         columns?: string;
@@ -1079,8 +1000,6 @@ export class Tables extends HeyApiClient {
                     { in: 'path', key: 'table' },
                     { in: 'query', key: 'url' },
                     { in: 'query', key: 'transform' },
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' },
                     { in: 'query', key: 'database' },
                     { in: 'query', key: 'query_id' },
                     { in: 'query', key: 'columns' },
@@ -1122,8 +1041,6 @@ export class Logs2 extends HeyApiClient {
      */
     public list<ThrowOnError extends boolean = true>(parameters: {
         workflow_id: string;
-        organization?: string | null;
-        cluster?: string | null;
         from?: number | null;
         to?: number | null;
         cursor?: string | null;
@@ -1131,8 +1048,6 @@ export class Logs2 extends HeyApiClient {
     }, options?: Options<never, ThrowOnError>): RequestResult<WorkflowsLogsListResponses, WorkflowsLogsListErrors, ThrowOnError, 'data'> {
         const params = buildClientParams([parameters], [{ args: [
                     { in: 'path', key: 'workflow_id' },
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' },
                     { in: 'query', key: 'from' },
                     { in: 'query', key: 'to' },
                     { in: 'query', key: 'cursor' },
@@ -1175,16 +1090,12 @@ export class Runs extends HeyApiClient {
      */
     public list<ThrowOnError extends boolean = true>(parameters: {
         workflow_id: string;
-        organization?: string;
-        cluster?: string;
         limit?: number;
         cursor?: string;
         run_id?: string;
     }, options?: Options<never, ThrowOnError>): RequestResult<WorkflowsRunsListResponses, WorkflowsRunsListErrors, ThrowOnError, 'data'> {
         const params = buildClientParams([parameters], [{ args: [
                     { in: 'path', key: 'workflow_id' },
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' },
                     { in: 'query', key: 'limit' },
                     { in: 'query', key: 'cursor' },
                     { in: 'query', key: 'run_id' }
@@ -1224,15 +1135,8 @@ export class Runs extends HeyApiClient {
     public create<ThrowOnError extends boolean = true>(parameters: {
         'Idempotency-Key'?: string | null;
         workflow_id: string;
-        organization?: string;
-        cluster?: string;
     }, options?: Options<never, ThrowOnError>): RequestResult<WorkflowsRunsCreateResponses, WorkflowsRunsCreateErrors, ThrowOnError, 'data'> {
-        const params = buildClientParams([parameters], [{ args: [
-                    { in: 'headers', key: 'Idempotency-Key' },
-                    { in: 'path', key: 'workflow_id' },
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' }
-                ] }]);
+        const params = buildClientParams([parameters], [{ args: [{ in: 'headers', key: 'Idempotency-Key' }, { in: 'path', key: 'workflow_id' }] }]);
         return (options?.client ?? this.client).post<WorkflowsRunsCreateResponses, WorkflowsRunsCreateErrors, ThrowOnError, 'data'>({
             responseStyle: 'data',
             security: [
@@ -1267,15 +1171,8 @@ export class Runs extends HeyApiClient {
     public cancel<ThrowOnError extends boolean = true>(parameters: {
         workflow_id: string;
         run_id: string;
-        organization?: string;
-        cluster?: string;
     }, options?: Options<never, ThrowOnError>): RequestResult<WorkflowsRunsCancelResponses, WorkflowsRunsCancelErrors, ThrowOnError, 'data'> {
-        const params = buildClientParams([parameters], [{ args: [
-                    { in: 'path', key: 'workflow_id' },
-                    { in: 'path', key: 'run_id' },
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' }
-                ] }]);
+        const params = buildClientParams([parameters], [{ args: [{ in: 'path', key: 'workflow_id' }, { in: 'path', key: 'run_id' }] }]);
         return (options?.client ?? this.client).post<WorkflowsRunsCancelResponses, WorkflowsRunsCancelErrors, ThrowOnError, 'data'>({
             responseStyle: 'data',
             security: [
@@ -1308,8 +1205,6 @@ export class Sinks extends HeyApiClient {
      */
     public create<ThrowOnError extends boolean = true>(parameters: {
         workflow_id: string;
-        organization?: string;
-        cluster?: string;
         body: {
             /**
              * Existing sink ID. Omit when adding a sink.
@@ -1336,12 +1231,7 @@ export class Sinks extends HeyApiClient {
             type: 'slack';
         };
     }, options?: Options<never, ThrowOnError>): RequestResult<WorkflowsSinksCreateResponses, WorkflowsSinksCreateErrors, ThrowOnError, 'data'> {
-        const params = buildClientParams([parameters], [{ args: [
-                    { in: 'path', key: 'workflow_id' },
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' },
-                    { key: 'body', map: 'body' }
-                ] }]);
+        const params = buildClientParams([parameters], [{ args: [{ in: 'path', key: 'workflow_id' }, { key: 'body', map: 'body' }] }]);
         return (options?.client ?? this.client).post<WorkflowsSinksCreateResponses, WorkflowsSinksCreateErrors, ThrowOnError, 'data'>({
             responseStyle: 'data',
             security: [
@@ -1378,15 +1268,8 @@ export class Sinks extends HeyApiClient {
     public delete<ThrowOnError extends boolean = true>(parameters: {
         workflow_id: string;
         sink_id: string;
-        organization?: string;
-        cluster?: string;
     }, options?: Options<never, ThrowOnError>): RequestResult<WorkflowsSinksDeleteResponses, WorkflowsSinksDeleteErrors, ThrowOnError, 'data'> {
-        const params = buildClientParams([parameters], [{ args: [
-                    { in: 'path', key: 'workflow_id' },
-                    { in: 'path', key: 'sink_id' },
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' }
-                ] }]);
+        const params = buildClientParams([parameters], [{ args: [{ in: 'path', key: 'workflow_id' }, { in: 'path', key: 'sink_id' }] }]);
         return (options?.client ?? this.client).delete<WorkflowsSinksDeleteResponses, WorkflowsSinksDeleteErrors, ThrowOnError, 'data'>({
             responseStyle: 'data',
             security: [
@@ -1418,16 +1301,12 @@ export class Sinks extends HeyApiClient {
     public update<ThrowOnError extends boolean = true>(parameters: {
         workflow_id: string;
         sink_id: string;
-        organization?: string;
-        cluster?: string;
         type?: null | SinkType;
         settings: HttpSinkSettingsInput | TableSinkSettingsPatch | SlackSinkSettingsPatch;
     }, options?: Options<never, ThrowOnError>): RequestResult<WorkflowsSinksUpdateResponses, WorkflowsSinksUpdateErrors, ThrowOnError, 'data'> {
         const params = buildClientParams([parameters], [{ args: [
                     { in: 'path', key: 'workflow_id' },
                     { in: 'path', key: 'sink_id' },
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' },
                     { in: 'body', key: 'type' },
                     { in: 'body', key: 'settings' }
                 ] }]);
@@ -1466,11 +1345,7 @@ export class Workflows extends HeyApiClient {
     /**
      * List workflows in an organization and cluster.
      */
-    public list<ThrowOnError extends boolean = true>(parameters?: {
-        organization?: string;
-        cluster?: string;
-    }, options?: Options<never, ThrowOnError>): RequestResult<WorkflowsListResponses, WorkflowsListErrors, ThrowOnError, 'data'> {
-        const params = buildClientParams([parameters], [{ args: [{ in: 'query', key: 'organization' }, { in: 'query', key: 'cluster' }] }]);
+    public list<ThrowOnError extends boolean = true>(options?: Options<never, ThrowOnError>): RequestResult<WorkflowsListResponses, WorkflowsListErrors, ThrowOnError, 'data'> {
         return (options?.client ?? this.client).get<WorkflowsListResponses, WorkflowsListErrors, ThrowOnError, 'data'>({
             responseStyle: 'data',
             security: [
@@ -1491,8 +1366,7 @@ export class Workflows extends HeyApiClient {
                 }
             ],
             url: '/v1/workflows',
-            ...options,
-            ...params
+            ...options
         });
     }
     
@@ -1500,8 +1374,6 @@ export class Workflows extends HeyApiClient {
      * Create a scheduled SQL workflow.
      */
     public create<ThrowOnError extends boolean = true>(parameters: {
-        organization?: string;
-        cluster?: string;
         name: string;
         description?: string | null;
         query: WorkflowQuery;
@@ -1509,8 +1381,6 @@ export class Workflows extends HeyApiClient {
         sinks?: Array<SinkInput>;
     }, options?: Options<never, ThrowOnError>): RequestResult<WorkflowsCreateResponses, WorkflowsCreateErrors, ThrowOnError, 'data'> {
         const params = buildClientParams([parameters], [{ args: [
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' },
                     { in: 'body', key: 'name' },
                     { in: 'body', key: 'description' },
                     { in: 'body', key: 'query' },
@@ -1552,14 +1422,8 @@ export class Workflows extends HeyApiClient {
      */
     public delete<ThrowOnError extends boolean = true>(parameters: {
         workflow_id: string;
-        organization?: string;
-        cluster?: string;
     }, options?: Options<never, ThrowOnError>): RequestResult<WorkflowsDeleteResponses, WorkflowsDeleteErrors, ThrowOnError, 'data'> {
-        const params = buildClientParams([parameters], [{ args: [
-                    { in: 'path', key: 'workflow_id' },
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' }
-                ] }]);
+        const params = buildClientParams([parameters], [{ args: [{ in: 'path', key: 'workflow_id' }] }]);
         return (options?.client ?? this.client).delete<WorkflowsDeleteResponses, WorkflowsDeleteErrors, ThrowOnError, 'data'>({
             responseStyle: 'data',
             security: [
@@ -1590,14 +1454,8 @@ export class Workflows extends HeyApiClient {
      */
     public get<ThrowOnError extends boolean = true>(parameters: {
         workflow_id: string;
-        organization?: string;
-        cluster?: string;
     }, options?: Options<never, ThrowOnError>): RequestResult<WorkflowsGetResponses, WorkflowsGetErrors, ThrowOnError, 'data'> {
-        const params = buildClientParams([parameters], [{ args: [
-                    { in: 'path', key: 'workflow_id' },
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' }
-                ] }]);
+        const params = buildClientParams([parameters], [{ args: [{ in: 'path', key: 'workflow_id' }] }]);
         return (options?.client ?? this.client).get<WorkflowsGetResponses, WorkflowsGetErrors, ThrowOnError, 'data'>({
             responseStyle: 'data',
             security: [
@@ -1628,8 +1486,6 @@ export class Workflows extends HeyApiClient {
      */
     public update<ThrowOnError extends boolean = true>(parameters: {
         workflow_id: string;
-        organization?: string;
-        cluster?: string;
         name?: string | null;
         description?: string | null;
         query?: null | UpdateWorkflowQuery;
@@ -1638,8 +1494,6 @@ export class Workflows extends HeyApiClient {
     }, options?: Options<never, ThrowOnError>): RequestResult<WorkflowsUpdateResponses, WorkflowsUpdateErrors, ThrowOnError, 'data'> {
         const params = buildClientParams([parameters], [{ args: [
                     { in: 'path', key: 'workflow_id' },
-                    { in: 'query', key: 'organization' },
-                    { in: 'query', key: 'cluster' },
                     { in: 'body', key: 'name' },
                     { in: 'body', key: 'description' },
                     { in: 'body', key: 'query' },
@@ -1708,6 +1562,11 @@ export class RawTreeApi extends HeyApiClient {
         return this._health ??= new Health({ client: this.client });
     }
     
+    private _apiKeys?: ApiKeys;
+    get apiKeys(): ApiKeys {
+        return this._apiKeys ??= new ApiKeys({ client: this.client });
+    }
+    
     private _clusters?: Clusters;
     get clusters(): Clusters {
         return this._clusters ??= new Clusters({ client: this.client });
@@ -1726,11 +1585,6 @@ export class RawTreeApi extends HeyApiClient {
     private _handlers?: Handlers;
     get handlers(): Handlers {
         return this._handlers ??= new Handlers({ client: this.client });
-    }
-    
-    private _apiKeys?: ApiKeys;
-    get apiKeys(): ApiKeys {
-        return this._apiKeys ??= new ApiKeys({ client: this.client });
     }
     
     private _logs?: Logs;
