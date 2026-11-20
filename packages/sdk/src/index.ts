@@ -146,7 +146,9 @@ export class RawTree extends RawTreeApi {
     { values, ...parameters }: InsertParams<Row>,
     options?: RequestOptions,
   ): Promise<InsertResponse> {
-    return this.tables.insert({ ...parameters, body: values }, options);
+    // Only transform=firehose returns a FirehoseInsertResponse, and its body is a
+    // Firehose envelope that AWS sends, not rows passed as `values`.
+    return this.tables.insert({ ...parameters, body: values }, options) as Promise<InsertResponse>;
   }
 }
 
