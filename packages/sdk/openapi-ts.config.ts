@@ -20,6 +20,24 @@ for (const item of Object.values<any>(spec.paths)) {
   }
 }
 
+// API keys are bound to one organization and cluster, so their selectors can only
+// repeat what the key already decides.
+const tenantSelectors = new Set([
+  "organization",
+  "cluster",
+  "X-RawTree-Organization-Id",
+  "X-RawTree-Cluster-Id",
+]);
+for (const item of Object.values<any>(spec.paths)) {
+  for (const op of Object.values<any>(item)) {
+    if (op?.parameters) {
+      op.parameters = op.parameters.filter(
+        (p: any) => !(["query", "header"].includes(p.in) && tenantSelectors.has(p.name)),
+      );
+    }
+  }
+}
+
 // The SDK authenticates with API keys, so publish only operations that accept one.
 const apiKeyOperations = Object.entries<any>(spec.paths).flatMap(([path, item]) =>
   Object.entries<any>(item)

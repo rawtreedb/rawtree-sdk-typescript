@@ -55,11 +55,11 @@ describe("RawTree", () => {
 
     await rawtree.query.run({ sql: "SELECT 1" });
     await rawtree.tables.insert({ table: "events", body: { event: "signup" }, database: "staging" });
-    await rawtree.workflows.list({ organization: "acme", cluster: "main" });
+    await rawtree.workflows.list();
 
     expect(sent(fetchMock, 0).url).toBe("https://api.rawtree.com/v1/query?database=analytics");
     expect(sent(fetchMock, 1).url).toBe("https://api.rawtree.com/v1/tables/events?database=staging");
-    expect(sent(fetchMock, 2).url).toBe("https://api.rawtree.com/v1/workflows?organization=acme&cluster=main");
+    expect(sent(fetchMock, 2).url).toBe("https://api.rawtree.com/v1/workflows");
   });
 
   it("inserts with a transform and encodes path params", async () => {
