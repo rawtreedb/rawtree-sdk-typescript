@@ -167,8 +167,8 @@ await rawtree.tables.list({}, { signal: controller.signal });
 ```
 
 Set `database` on the client for a default database. The SDK sends it as the
-`?database=<name>` query parameter on operations that take a database, unless
-the call passes its own `database`.
+`x-rawtree-database` header on operations that take a database, unless the call
+passes its own `database`.
 
 Failed requests throw `RawTreeError`, with the HTTP `status` and the API's
 `error`, `message` and `hint`.

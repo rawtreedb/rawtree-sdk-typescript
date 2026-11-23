@@ -1,3 +1,5 @@
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import packageJson from "../packages/sdk/package.json" with { type: "json" };
 import { RawTree, RawTreeError, type InsertResponse, type QueryResponse } from "../packages/sdk/src/index.js";
@@ -148,11 +150,56 @@ describe("RawTree", () => {
 
     await rawtree.query.run({ sql: "SELECT 1" });
     await rawtree.tables.insert({ table: "events", body: { event: "signup" }, database: "staging" });
+    await rawtree.tables.list({}, { headers: { "X-RawTree-Database": "logs" } });
     await rawtree.workflows.list();
 
-    expect(sent(fetchMock, 0).url).toBe("https://api.rawtree.com/v1/query?database=analytics");
+    const database = (call: number) => sent(fetchMock, call).headers.get("x-rawtree-database");
+    expect(sent(fetchMock, 0).url).toBe("https://api.rawtree.com/v1/query");
+    expect(database(0)).toBe("analytics");
     expect(sent(fetchMock, 1).url).toBe("https://api.rawtree.com/v1/tables/events?database=staging");
-    expect(sent(fetchMock, 2).url).toBe("https://api.rawtree.com/v1/workflows");
+    expect(database(1)).toBeNull();
+    expect(database(2)).toBe("logs");
+    expect(database(3)).toBeNull();
+  });
+
+  it("trims the default database and rejects blank names", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () => jsonResponse(emptyQuery));
+    const rawtree = new RawTree({ apiKey: "rw_test", database: " analytics ", fetch: fetchMock });
+
+    await rawtree.query.run({ sql: "SELECT 1" });
+
+    expect(sent(fetchMock).headers.get("x-rawtree-database")).toBe("analytics");
+    expect(() => new RawTree({ apiKey: "rw_test", database: "  " })).toThrow("database");
+  });
+
+  it("keeps bodies replayable with a default database", async () => {
+    const server = createServer((request, response) => {
+      let body = "";
+      request.on("data", (chunk) => (body += chunk));
+      request.on("end", () => {
+        if (request.url?.startsWith("/v1/tables/redirect")) {
+          response.writeHead(307, { Location: "/v1/tables/events" }).end();
+          return;
+        }
+        response
+          .writeHead(200, { "Content-Type": "application/json" })
+          .end(JSON.stringify({ inserted: 1, received: { url: request.url, database: request.headers["x-rawtree-database"], body } }));
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const { port } = server.address() as AddressInfo;
+      const rawtree = new RawTree({ apiKey: "rw_test", database: "analytics", baseUrl: `http://127.0.0.1:${port}` });
+      const expected = { url: "/v1/tables/events", database: "analytics", body: JSON.stringify({ event: "signup" }) };
+
+      const keepalive = await rawtree.tables.insert({ table: "events", body: { event: "signup" } }, { keepalive: true });
+      const redirected = await rawtree.tables.insert({ table: "redirect", body: { event: "signup" } });
+
+      expect(keepalive).toMatchObject({ received: expected });
+      expect(redirected).toMatchObject({ received: expected });
+    } finally {
+      server.close();
+    }
   });
 
   it("inserts with a transform and encodes path params", async () => {
@@ -238,7 +285,8 @@ describe("shorthand aliases", () => {
 
     const [alias, grouped] = [await summary(fetchMock, 0), await summary(fetchMock, 1)];
     expect(alias).toEqual(grouped);
-    expect(alias.url).toBe("https://api.rawtree.com/v1/query?database=analytics");
+    expect(alias.url).toBe("https://api.rawtree.com/v1/query");
+    expect(sent(fetchMock, 0).headers.get("x-rawtree-database")).toBe("analytics");
   });
 
   it("keeps the rest of the query group reachable", async () => {

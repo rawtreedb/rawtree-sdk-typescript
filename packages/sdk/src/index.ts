@@ -174,13 +174,14 @@ export class RawTree extends RawTreeApi {
       }),
     );
 
-    const { database } = options;
+    const database = normalizeDatabase(options.database);
     if (database !== undefined) {
-      client.interceptors.request.use((request, opts) =>
-        databaseOperations.has(`${opts.method} ${opts.url}`)
-          ? withDefaultDatabase(request, database)
-          : request,
-      );
+      client.interceptors.request.use((request, opts) => {
+        if (databaseOperations.has(`${opts.method} ${opts.url}`)) {
+          setDefaultDatabase(request, database);
+        }
+        return request;
+      });
     }
     client.interceptors.error.use((error, response) =>
       response ? new RawTreeError(response, error as Partial<ErrorResponse> | string) : error,
@@ -210,9 +211,17 @@ export class RawTree extends RawTreeApi {
 
 export type { QueryRunData };
 
-function withDefaultDatabase(request: Request, database: string): Request {
-  const url = new URL(request.url);
-  if (url.searchParams.has("database")) return request;
-  url.searchParams.set("database", database);
-  return new Request(url, request);
+function normalizeDatabase(database: string | undefined): string | undefined {
+  if (database === undefined) return undefined;
+  const normalized = typeof database === "string" ? database.trim() : "";
+  if (normalized === "") {
+    throw new TypeError("RawTree database must be a non-empty string.");
+  }
+  return normalized;
+}
+
+
+function setDefaultDatabase(request: Request, database: string): void {
+  if (new URL(request.url).searchParams.has("database") || request.headers.has("x-rawtree-database")) return;
+  request.headers.set("x-rawtree-database", database);
 }
