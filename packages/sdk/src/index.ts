@@ -186,8 +186,12 @@ export class RawTree extends RawTreeApi {
         return request;
       });
     }
+    // The client throws the parsed body of a failed response. Anything else, such
+    // as an abort or a malformed body on a 200, keeps its original error.
     client.interceptors.error.use((error, response) =>
-      response ? new RawTreeError(response, error as Partial<ErrorResponse> | string) : error,
+      response && !response.ok && !(error instanceof Error)
+        ? new RawTreeError(response, error as Partial<ErrorResponse> | string)
+        : error,
     );
 
     super({ client });

@@ -257,6 +257,40 @@ describe("RawTree", () => {
     await expect(rawtree.tables.list()).rejects.toBeInstanceOf(RawTreeError);
   });
 
+  it("keeps abort and body errors on successful responses", async () => {
+    const server = createServer((request, response) => {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      if (request.url?.startsWith("/v1/tables")) response.end("{not json");
+      else response.write('{"data":[');
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const { port } = server.address() as AddressInfo;
+      const controller = new AbortController();
+      const rawtree = new RawTree({
+        apiKey: "rw_test",
+        baseUrl: `http://127.0.0.1:${port}`,
+        fetch: async (request) => {
+          const response = await fetch(request);
+          if ((request as Request).url.includes("/v1/query")) setTimeout(() => controller.abort());
+          return response;
+        },
+      });
+
+      const aborted = await rawtree.query
+        .run({ sql: "SELECT 1" }, { signal: controller.signal })
+        .catch((error) => error);
+      expect(aborted).not.toBeInstanceOf(RawTreeError);
+      expect(aborted).toMatchObject({ name: "AbortError" });
+      const malformed = await rawtree.tables.list().catch((error) => error);
+      expect(malformed).not.toBeInstanceOf(RawTreeError);
+      expect(malformed).toBeInstanceOf(SyntaxError);
+    } finally {
+      server.closeAllConnections();
+      server.close();
+    }
+  });
+
   it("reaches operations the hand-written SDK never had", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ id: "s1" }, { status: 201 }));
     const rawtree = new RawTree({ apiKey: "rw_test", fetch: fetchMock });
