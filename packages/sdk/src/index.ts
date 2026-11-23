@@ -54,7 +54,10 @@ export class RawTreeError extends Error {
   }
 }
 
-/** Per-request options, such as `signal` and `headers`, accepted as the last argument of every method. */
+/**
+ * Per-request options, such as `signal` and `headers`, accepted as the last argument of every method.
+ * Pass `headers` as a plain object: some generated methods drop `Headers` instances and misread arrays.
+ */
 export type RequestOptions = Options<never, true>;
 export type QueryParams = Parameters<Query["run"]>[0];
 export type DescribeTableParams = Parameters<Tables["describe"]>[0];

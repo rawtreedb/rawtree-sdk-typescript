@@ -166,6 +166,11 @@ await rawtree.databases.create({ name: "analytics" });
 await rawtree.tables.list({}, { signal: controller.signal });
 ```
 
+Pass `headers` as a plain object, such as `{ "X-Request-Id": "abc" }`. Some
+methods drop a `Headers` instance, and arrays of `[name, value]` pairs are sent
+with the wrong names. `workflows.runs.create` also drops `headers` when the call
+sets `Idempotency-Key`; to send both, put `Idempotency-Key` in `headers`.
+
 Set `database` on the client for a default database. The SDK sends it as the
 `x-rawtree-database` header on operations that take a database, unless the call
 passes its own `database`.
