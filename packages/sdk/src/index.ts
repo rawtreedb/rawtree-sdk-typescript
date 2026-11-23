@@ -220,7 +220,10 @@ function normalizeDatabase(database: string | undefined): string | undefined {
   return normalized;
 }
 
-
+// Set a header in place instead of adding `?database=`: a Request's URL is
+// immutable, and copying the Request turns its body into a stream, which
+// breaks keepalive and 307/308 redirects. The API rejects a header that
+// disagrees with the query parameter, so a per-call `database` skips it.
 function setDefaultDatabase(request: Request, database: string): void {
   if (new URL(request.url).searchParams.has("database") || request.headers.has("x-rawtree-database")) return;
   request.headers.set("x-rawtree-database", database);
