@@ -42,7 +42,7 @@ jobs:
           delete-branch: true
           add-paths: packages/sdk/src
           commit-message: "chore(sdk): regenerate from the OpenAPI spec"
-          title: ${{ inputs.spec_url && 'chore(sdk): preview from a non-production spec' || 'chore(sdk): regenerate from the OpenAPI spec' }}
+          title: "${{ inputs.spec_url && 'chore(sdk): preview from a non-production spec' || 'chore(sdk): regenerate from the OpenAPI spec' }}"
           reviewers: ${{ vars.SDK_UPDATE_REVIEWERS }}
           body: |
             Regenerated from ${{ env.RAWTREE_OPENAPI_URL }}.
