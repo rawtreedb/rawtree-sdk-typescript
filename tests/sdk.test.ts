@@ -49,6 +49,48 @@ describe("RawTree", () => {
     expect(request.headers.get("User-Agent")).toBe(`rawtree-sdk-typescript/${packageJson.version}`);
   });
 
+  it.each([
+    ["CSVWithNames", "text/csv", "n\n1\n"],
+    ["TabSeparated", "text/tab-separated-values", "1\ta\n"],
+    ["JSONEachRow", "application/json", '{"n":1}\n{"n":2}\n'],
+    ["JSONEachRowWithProgress", "application/x-ndjson", '{"progress":{}}\n{"row":{"n":1}}\n'],
+  ] as const)("returns %s queries as text on GET and POST", async (format, mediaType, body) => {
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () =>
+      new Response(body, { headers: { "Content-Type": mediaType } }),
+    );
+    const rawtree = new RawTree({ apiKey: "rw_test", fetch: fetchMock });
+    const query = { sql: "SELECT 1", format };
+
+    const get = await rawtree.query.runReadOnly(query);
+    const post = await rawtree.query(query);
+    expectTypeOf(get).toEqualTypeOf<string>();
+    expectTypeOf(post).toEqualTypeOf<string>();
+    expect(get).toBe(body);
+    expect(post).toBe(body);
+  });
+
+  it("honors an explicit stream decoder for progress queries", async () => {
+    const response = new Response('{"progress":{}}\n', { headers: { "Content-Type": "application/x-ndjson" } });
+    const rawtree = new RawTree({ apiKey: "rw_test", fetch: vi.fn<typeof fetch>().mockResolvedValue(response) });
+
+    const stream = await rawtree.query.runReadOnly(
+      { sql: "SELECT 1", format: "JSONEachRowWithProgress" },
+      { parseAs: "stream" },
+    );
+    expectTypeOf(stream).toEqualTypeOf<Response["body"]>();
+    expect(stream).toBe(response.body);
+  });
+
+  it("omits the body for a URL insert", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
+    const rawtree = new RawTree({ apiKey: "rw_test", fetch: fetchMock });
+
+    type Body = Parameters<typeof rawtree.tables.insert>[0]["body"];
+    expectTypeOf<null>().not.toMatchTypeOf<Body>();
+    await rawtree.tables.insert({ table: "events", url: "https://example.com/rows" });
+    expect(sent(fetchMock).body).toBeNull();
+  });
+
   it("applies the default database only where the operation accepts it", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () => jsonResponse(emptyQuery));
     const rawtree = new RawTree({ apiKey: "rw_test", database: "analytics", fetch: fetchMock });
@@ -180,8 +222,12 @@ describe("shorthand aliases", () => {
   it("types rows on both forms", () => {
     type Row = { event: string };
     const rawtree = new RawTree({ apiKey: "rw_test" });
-    expectTypeOf(rawtree.query<Row>).returns.toEqualTypeOf<Promise<QueryResponse<Row>>>();
-    expectTypeOf(rawtree.query.run<Row>).returns.toEqualTypeOf<Promise<QueryResponse<Row>>>();
+    const checkRows = () => [
+      rawtree.query<Row>({ sql: "SELECT 1" }),
+      rawtree.query.run<Row>({ sql: "SELECT 1", format: "JSON" }),
+      rawtree.query.runReadOnly<Row>({ sql: "SELECT 1" }),
+    ];
+    expectTypeOf(checkRows).returns.toEqualTypeOf<Promise<QueryResponse<Row>>[]>();
     expectTypeOf(rawtree.insert<Row>).parameter(0).toHaveProperty("values").toEqualTypeOf<Row | Row[]>();
     expectTypeOf<Awaited<ReturnType<typeof rawtree.insert<Row>>>>().toEqualTypeOf<InsertResponse>();
   });

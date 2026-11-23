@@ -253,15 +253,6 @@ export type HttpSinkSettingsView = {
     header_names: Array<string>;
 };
 
-/**
- * A single JSON object (one row) or an array of JSON objects (one row each).
- */
-export type InsertBody = {
-    [key: string]: unknown;
-} | Array<{
-    [key: string]: unknown;
-}>;
-
 export type InsertResponse = {
     /**
      * Legacy count. Normal inserts use written_rows from the database summary, or null if unavailable.
@@ -1348,7 +1339,12 @@ export type QueryRunReadOnlyErrors = {
 export type QueryRunReadOnlyError = QueryRunReadOnlyErrors[keyof QueryRunReadOnlyErrors];
 
 export type QueryRunReadOnlyResponses = {
-    200: QueryResponse;
+    /**
+     * The format parameter selects the response. JSON and JSONCompact return a result
+     * envelope. JSONEachRow sends one object per line with the legacy application/json
+     * header. JSONEachRowWithProgress streams newline-delimited records.
+     */
+    200: QueryResponse | string;
 };
 
 export type QueryRunReadOnlyResponse = QueryRunReadOnlyResponses[keyof QueryRunReadOnlyResponses];
@@ -1387,7 +1383,12 @@ export type QueryRunErrors = {
 export type QueryRunError = QueryRunErrors[keyof QueryRunErrors];
 
 export type QueryRunResponses = {
-    200: QueryResponse;
+    /**
+     * The format parameter selects the response. JSON and JSONCompact return a result
+     * envelope. JSONEachRow sends one object per line with the legacy application/json
+     * header. JSONEachRowWithProgress streams newline-delimited records.
+     */
+    200: QueryResponse | string;
 };
 
 export type QueryRunResponse = QueryRunResponses[keyof QueryRunResponses];
@@ -1680,9 +1681,13 @@ export type TablesUpdateResponse = TablesUpdateResponses[keyof TablesUpdateRespo
 
 export type TablesInsertData = {
     /**
-     * A single JSON object or array of objects. Mutually exclusive with the 'url' query parameter. With transform=firehose, the body is the Amazon Data Firehose HTTP endpoint request: an object with requestId and records, each record carrying base64-encoded data.
+     * A single JSON object (one row) or an array of JSON objects (one row each).
      */
-    body?: null | InsertBody;
+    body?: {
+        [key: string]: unknown;
+    } | Array<{
+        [key: string]: unknown;
+    }>;
     path: {
         /**
          * Table name

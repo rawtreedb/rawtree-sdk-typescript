@@ -20,6 +20,16 @@ for (const item of Object.values<any>(spec.paths)) {
   }
 }
 
+// Hey API selects a single media type per status. Query responses can be JSON
+// or text, so give the TypeScript generator all the documented success schemas.
+for (const operation of [spec.paths["/v1/query"].get, spec.paths["/v1/query"].post]) {
+  const content = operation.responses["200"].content;
+  const mediaTypes = Object.values<{ schema: object }>(content);
+  if (mediaTypes.length > 1) {
+    content["application/json"] = { schema: { anyOf: mediaTypes.map(({ schema }) => schema) } };
+  }
+}
+
 // API keys are bound to one organization and cluster, so their selectors can only
 // repeat what the key already decides.
 const tenantSelectors = new Set([

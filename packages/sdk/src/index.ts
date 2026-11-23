@@ -6,6 +6,7 @@ import type {
   InsertResponse,
   QueryResponse as GeneratedQueryResponse,
   QueryRunData,
+  QueryRunResponse,
 } from "./generated/types.gen.js";
 import { databaseOperations } from "./database-operations.gen.js";
 
@@ -57,21 +58,60 @@ export class RawTreeError extends Error {
 export type RequestOptions = Options<never, true>;
 export type QueryParams = Parameters<Query["run"]>[0];
 export type DescribeTableParams = Parameters<Tables["describe"]>[0];
-type QueryOptions = Parameters<Query["run"]>[1];
 
-class TypedQuery extends Query {
-  override run<Row = unknown>(
-    parameters: QueryParams,
-    options?: QueryOptions,
-  ): Promise<QueryResponse<Row>> {
-    return super.run(parameters, options) as Promise<QueryResponse<Row>>;
+type JsonFormat = "JSON" | "JSONCompact";
+type TextFormat = "CSV" | "CSVWithNames" | "TSV" | "TSVWithNames" | "TabSeparated"
+  | "JSONEachRow" | "JSONEachRowWithProgress";
+type AutomaticQueryOptions = RequestOptions & { parseAs?: "auto"; responseStyle?: never };
+type QueryDecoders = {
+  arrayBuffer: ArrayBuffer;
+  blob: Blob;
+  formData: FormData;
+  json: unknown;
+  stream: Response["body"];
+  text: string;
+};
+
+function typedQuery<Params extends { format?: string | null }>(
+  execute: (parameters: Params, options?: Options<never, boolean>) => Promise<QueryRunResponse | undefined>,
+) {
+  function run<Decoder extends keyof QueryDecoders>(
+    parameters: Params,
+    options: RequestOptions & { parseAs: Decoder; responseStyle?: never },
+  ): Promise<QueryDecoders[Decoder]>;
+  function run<Row = unknown>(
+    parameters: Params & { format?: JsonFormat | null },
+    options?: AutomaticQueryOptions,
+  ): Promise<QueryResponse<Row>>;
+  function run(
+    parameters: Params & { format: TextFormat },
+    options?: AutomaticQueryOptions,
+  ): Promise<string>;
+  function run<Throws extends boolean = true>(
+    parameters: Params, options?: Options<never, Throws>,
+  ): Promise<Throws extends true ? QueryRunResponse : QueryRunResponse | undefined>;
+  function run(parameters: Params, options?: Options<never, boolean>): Promise<unknown> {
+    // Both row formats carry newline-delimited records. The fetch client otherwise
+    // tries JSON.parse for JSONEachRow and reads the progress media type as a Blob.
+    const format = parameters.format?.trim().toLowerCase();
+    const rowFormat = format === "jsoneachrow" || format === "jsoneachrowwithprogress";
+    if (rowFormat && (!options?.parseAs || options.parseAs === "auto")) {
+      return execute(parameters, { ...options, parseAs: "text" });
+    }
+    return execute(parameters, options);
   }
+  return run;
 }
 
-/** `rawtree.query({ sql })` runs a query; `rawtree.query.run` and `rawtree.query.format` stay available. */
-export type QueryClient = TypedQuery &
-  (<Row = unknown>(parameters: QueryParams, options?: QueryOptions) => Promise<QueryResponse<Row>>);
+class TypedQuery extends Query {
+  override run = typedQuery<QueryParams>(super.run.bind(this));
+  override runReadOnly = typedQuery<Parameters<Query["runReadOnly"]>[0]>(super.runReadOnly.bind(this));
+}
 
+/** `rawtree.query({ sql })` is shorthand for `rawtree.query.run({ sql })`. */
+export type QueryClient = TypedQuery & TypedQuery["run"];
+
+export type InsertBody = NonNullable<Parameters<Tables["insert"]>[0]["body"]>;
 export type InsertRow = Record<string, unknown>;
 
 export type InsertParams<Row extends InsertRow = InsertRow> = Omit<
