@@ -1340,11 +1340,13 @@ export type QueryRunReadOnlyError = QueryRunReadOnlyErrors[keyof QueryRunReadOnl
 
 export type QueryRunReadOnlyResponses = {
     /**
-     * The format parameter selects the response. JSON and JSONCompact return a result
-     * envelope. JSONEachRow sends one object per line with the legacy application/json
-     * header. JSONEachRowWithProgress streams newline-delimited records.
+     * JSON and JSONCompact return a result envelope. JSONEachRow and JSONEachRowWithProgress
+     * return newline-delimited records. With output_format_json_array_of_rows enabled,
+     * JSONEachRow returns a single JSON array.
      */
-    200: QueryResponse | string;
+    200: QueryResponse | Array<{
+        [key: string]: unknown;
+    }> | string;
 };
 
 export type QueryRunReadOnlyResponse = QueryRunReadOnlyResponses[keyof QueryRunReadOnlyResponses];
@@ -1384,11 +1386,13 @@ export type QueryRunError = QueryRunErrors[keyof QueryRunErrors];
 
 export type QueryRunResponses = {
     /**
-     * The format parameter selects the response. JSON and JSONCompact return a result
-     * envelope. JSONEachRow sends one object per line with the legacy application/json
-     * header. JSONEachRowWithProgress streams newline-delimited records.
+     * JSON and JSONCompact return a result envelope. JSONEachRow and JSONEachRowWithProgress
+     * return newline-delimited records. With output_format_json_array_of_rows enabled,
+     * JSONEachRow returns a single JSON array.
      */
-    200: QueryResponse | string;
+    200: QueryResponse | Array<{
+        [key: string]: unknown;
+    }> | string;
 };
 
 export type QueryRunResponse = QueryRunResponses[keyof QueryRunResponses];

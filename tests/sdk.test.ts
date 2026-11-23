@@ -52,7 +52,8 @@ describe("RawTree", () => {
   it.each([
     ["CSVWithNames", "text/csv", "n\n1\n"],
     ["TabSeparated", "text/tab-separated-values", "1\ta\n"],
-    ["JSONEachRow", "application/json", '{"n":1}\n{"n":2}\n'],
+    ["JSONEachRow", "application/x-ndjson", '{"n":1}\n{"n":2}\n'],
+    ["JSONEachRow", "application/json", '[{"n":1},{"n":2}]'],
     ["JSONEachRowWithProgress", "application/x-ndjson", '{"progress":{}}\n{"row":{"n":1}}\n'],
   ] as const)("returns %s queries as text on GET and POST", async (format, mediaType, body) => {
     const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () =>
@@ -79,6 +80,25 @@ describe("RawTree", () => {
     );
     expectTypeOf(stream).toEqualTypeOf<Response["body"]>();
     expect(stream).toBe(response.body);
+  });
+
+  it("returns field-style results for successful and failed queries", async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response("1\n", { headers: { "Content-Type": "text/csv" } }))
+      .mockResolvedValueOnce(jsonResponse({ message: "Invalid SQL" }, { status: 400 }));
+    const rawtree = new RawTree({ apiKey: "rw_test", fetch: fetchMock });
+    const params = { sql: "SELECT 1", format: "CSV" } as const;
+
+    const success = await rawtree.query.runReadOnly(params, { responseStyle: "fields" });
+    expectTypeOf(success.data).toEqualTypeOf<string>();
+    expect(success.data).toBe("1\n");
+    expect(success.response.status).toBe(200);
+
+    const failure = await rawtree.query(params, { responseStyle: "fields", throwOnError: false });
+    expectTypeOf(failure.data).toEqualTypeOf<string | undefined>();
+    expect(failure.data).toBeUndefined();
+    expect(failure.error).toBeInstanceOf(RawTreeError);
+    expect(failure.response?.status).toBe(400);
   });
 
   it("omits the body for a URL insert", async () => {

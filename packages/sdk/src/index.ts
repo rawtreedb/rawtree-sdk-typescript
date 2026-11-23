@@ -1,5 +1,5 @@
 import packageJson from "../package.json" with { type: "json" };
-import { createClient, createConfig } from "./generated/client/index.js";
+import { createClient, createConfig, type RequestResult, type ResponseStyle } from "./generated/client/index.js";
 import { type Options, Query, RawTreeApi, type Tables } from "./generated/sdk.gen.js";
 import type {
   ErrorResponse,
@@ -72,27 +72,30 @@ type QueryDecoders = {
   text: string;
 };
 
+type QueryPayload<Format, Decoder> =
+  Decoder extends keyof QueryDecoders ? QueryDecoders[Decoder] :
+  Format extends JsonFormat | null ? QueryResponse :
+  Format extends TextFormat ? string : QueryRunResponse;
+
 function typedQuery<Params extends { format?: string | null }>(
   execute: (parameters: Params, options?: Options<never, boolean>) => Promise<QueryRunResponse | undefined>,
 ) {
-  function run<Decoder extends keyof QueryDecoders>(
-    parameters: Params,
-    options: RequestOptions & { parseAs: Decoder; responseStyle?: never },
-  ): Promise<QueryDecoders[Decoder]>;
   function run<Row = unknown>(
     parameters: Params & { format?: JsonFormat | null },
     options?: AutomaticQueryOptions,
   ): Promise<QueryResponse<Row>>;
-  function run(
-    parameters: Params & { format: TextFormat },
-    options?: AutomaticQueryOptions,
-  ): Promise<string>;
-  function run<Throws extends boolean = true>(
-    parameters: Params, options?: Options<never, Throws>,
-  ): Promise<Throws extends true ? QueryRunResponse : QueryRunResponse | undefined>;
+  function run<
+    Throws extends boolean = true,
+    Format extends string | null = "JSON",
+    Decoder extends keyof QueryDecoders | "auto" = "auto",
+    Style extends ResponseStyle = "data",
+  >(
+    parameters: Params & { format?: Format },
+    options?: Options<never, Throws> & { parseAs?: Decoder; responseStyle?: Style; throwOnError?: Throws },
+  ): RequestResult<{ 200: QueryPayload<Format, Decoder> }, unknown, Throws, Style>;
   function run(parameters: Params, options?: Options<never, boolean>): Promise<unknown> {
-    // Both row formats carry newline-delimited records. The fetch client otherwise
-    // tries JSON.parse for JSONEachRow and reads the progress media type as a Blob.
+    // Return NDJSON as text by default, including JSONEachRow from older servers
+    // that use application/json for the same newline-delimited bytes.
     const format = parameters.format?.trim().toLowerCase();
     const rowFormat = format === "jsoneachrow" || format === "jsoneachrowwithprogress";
     if (rowFormat && (!options?.parseAs || options.parseAs === "auto")) {
