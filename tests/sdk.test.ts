@@ -54,6 +54,7 @@ describe("RawTree", () => {
     ["TabSeparated", "text/tab-separated-values", "1\ta\n"],
     ["JSONEachRow", "application/x-ndjson", '{"n":1}\n{"n":2}\n'],
     ["JSONEachRow", "application/json", '[{"n":1},{"n":2}]'],
+    ["JSONEachRow", "application/json", '{"n":1}\n{"n":2}\n'],
     ["JSONEachRowWithProgress", "application/x-ndjson", '{"progress":{}}\n{"row":{"n":1}}\n'],
   ] as const)("returns %s queries as text on GET and POST", async (format, mediaType, body) => {
     const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () =>
@@ -99,6 +100,24 @@ describe("RawTree", () => {
     expect(failure.data).toBeUndefined();
     expect(failure.error).toBeInstanceOf(RawTreeError);
     expect(failure.response?.status).toBe(400);
+  });
+
+  it("includes defaults in the return type for optional overrides", async () => {
+    const rawtree = new RawTree({
+      apiKey: "rw_test",
+      fetch: vi.fn<typeof fetch>().mockImplementation(async () => jsonResponse(emptyQuery)),
+    });
+    const params: { sql: string; format?: "CSV" } = { sql: "SELECT 1" };
+    const decoder: { parseAs?: "text" } = {};
+    const style: { responseStyle?: "fields" } = {};
+
+    const formatted = await rawtree.query(params);
+    const decoded = await rawtree.query.runReadOnly({ sql: params.sql }, decoder);
+    const styled = await rawtree.query.run({ sql: params.sql }, style);
+    expectTypeOf(formatted).toEqualTypeOf<QueryResponse | string>();
+    expectTypeOf(decoded).toEqualTypeOf<QueryResponse | string>();
+    expectTypeOf(styled).toEqualTypeOf<QueryResponse | { data: QueryResponse; request: Request; response: Response }>();
+    expect([formatted, decoded, styled]).toEqual([emptyQuery, emptyQuery, emptyQuery]);
   });
 
   it("omits the body for a URL insert", async () => {

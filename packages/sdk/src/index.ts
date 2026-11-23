@@ -77,6 +77,19 @@ type QueryPayload<Format, Decoder> =
   Format extends JsonFormat | null ? QueryResponse :
   Format extends TextFormat ? string : QueryRunResponse;
 
+// Optional overrides can be absent at runtime. Their result includes the default.
+type WithDefault<Value, Default> = Exclude<Value, undefined> | (undefined extends Value ? Default : never);
+type Setting<Input, Key extends PropertyKey, Default> = Input extends unknown
+  ? Key extends keyof Input ? WithDefault<Input[Key], Default> : Default
+  : never;
+
+type QueryCallResult<Params, Opts> = RequestResult<
+  { 200: QueryPayload<Setting<Params, "format", "JSON">, Setting<Opts, "parseAs", "auto">> },
+  unknown,
+  Setting<Opts, "throwOnError", true> & boolean,
+  Setting<Opts, "responseStyle", "data"> & ResponseStyle
+>;
+
 function typedQuery<Params extends { format?: string | null }>(
   execute: (parameters: Params, options?: Options<never, boolean>) => Promise<QueryRunResponse | undefined>,
 ) {
@@ -84,15 +97,10 @@ function typedQuery<Params extends { format?: string | null }>(
     parameters: Params & { format?: JsonFormat | null },
     options?: AutomaticQueryOptions,
   ): Promise<QueryResponse<Row>>;
-  function run<
-    Throws extends boolean = true,
-    Format extends string | null = "JSON",
-    Decoder extends keyof QueryDecoders | "auto" = "auto",
-    Style extends ResponseStyle = "data",
-  >(
-    parameters: Params & { format?: Format },
-    options?: Options<never, Throws> & { parseAs?: Decoder; responseStyle?: Style; throwOnError?: Throws },
-  ): RequestResult<{ 200: QueryPayload<Format, Decoder> }, unknown, Throws, Style>;
+  function run<const Input extends Params>(parameters: Input): QueryCallResult<Input, undefined>;
+  function run<const Input extends Params, const Opts extends Options<never, boolean> | undefined>(
+    parameters: Input, options: Opts,
+  ): QueryCallResult<Input, Opts>;
   function run(parameters: Params, options?: Options<never, boolean>): Promise<unknown> {
     // Return NDJSON as text by default, including JSONEachRow from older servers
     // that use application/json for the same newline-delimited bytes.
