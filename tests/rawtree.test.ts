@@ -3,7 +3,7 @@ import { generateText } from "ai";
 import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { ExportResultCode } from "@opentelemetry/core";
 import { BasicTracerProvider, type ReadableSpan } from "@opentelemetry/sdk-trace-base";
-import { RawTree, RawTreeError, type QueryResponse } from "../packages/sdk/src/index.js";
+import { RawTreeError } from "../packages/sdk/src/index.js";
 import {
   aiSdkIntegration,
   daytonaIntegration,
@@ -26,16 +26,29 @@ function jsonResponse(body: unknown, init?: ResponseInit): Response {
   });
 }
 
+function requestAt(fetchMock: ReturnType<typeof vi.fn>, call = 0): Request {
+  return fetchMock.mock.calls[call]?.[0] as Request;
+}
+
+function bodyAt(fetchMock: ReturnType<typeof vi.fn>, call = 0) {
+  return requestAt(fetchMock, call).clone().json();
+}
+
+async function allRows(fetchMock: ReturnType<typeof vi.fn>) {
+  const bodies = await Promise.all(fetchMock.mock.calls.map((_, call) => bodyAt(fetchMock, call)));
+  return bodies.flat();
+}
+
 function firstOtlpExport(fetchMock: ReturnType<typeof vi.fn>) {
-  return JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
+  return bodyAt(fetchMock);
 }
 
-function firstOtlpSpan(fetchMock: ReturnType<typeof vi.fn>) {
-  return firstOtlpExport(fetchMock).resourceSpans[0].scopeSpans[0].spans[0];
+async function firstOtlpSpan(fetchMock: ReturnType<typeof vi.fn>) {
+  return (await firstOtlpExport(fetchMock)).resourceSpans[0].scopeSpans[0].spans[0];
 }
 
-function firstOtlpResource(fetchMock: ReturnType<typeof vi.fn>) {
-  return firstOtlpExport(fetchMock).resourceSpans[0].resource;
+async function firstOtlpResource(fetchMock: ReturnType<typeof vi.fn>) {
+  return (await firstOtlpExport(fetchMock)).resourceSpans[0].resource;
 }
 
 function unauthorizedResponse(message = "Invalid API key"): Response {
@@ -103,237 +116,7 @@ function clearEnv(keys: readonly string[]): void {
   }
 }
 
-describe("RawTree", () => {
-  it("requires a non-empty api key", () => {
-    expect(() => new RawTree({ apiKey: "" })).toThrow("apiKey");
-  });
-
-  it("executes typed queries", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      jsonResponse({
-        meta: [{ name: "event", type: "String" }],
-        data: [{ event: "signup" }],
-        rows: 1,
-        statistics: { elapsed: 0.01, rows_read: 1, bytes_read: 10 },
-      }),
-    );
-    const rawtree = new RawTree({ apiKey: "rw_test", fetch: fetchMock });
-
-    const result = await rawtree.query<{ event: string }>({
-      sql: "SELECT event FROM events",
-    });
-
-    expect(result.data[0]?.event).toBe("signup");
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.rawtree.com/v1/query",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({ sql: "SELECT event FROM events" }),
-      }),
-    );
-
-    const headers = fetchMock.mock.calls[0]?.[1]?.headers;
-    expect(headers).toBeInstanceOf(Headers);
-    expect((headers as Headers).get("Authorization")).toBe("Bearer rw_test");
-    expect((headers as Headers).get("Content-Type")).toBe("application/json");
-    expect((headers as Headers).get("User-Agent")).toBe("rawtree-sdk-typescript/0.2.1");
-    expect((headers as Headers).get("x-rawtree-database")).toBeNull();
-  });
-
-  it("uses the client database unless a request overrides it", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () =>
-      jsonResponse({ meta: [], data: [], rows: 0, statistics: {} }),
-    );
-    const rawtree = new RawTree({
-      apiKey: "rw_test",
-      database: "analytics",
-      fetch: fetchMock,
-    });
-
-    await rawtree.query({ sql: "SELECT 1" });
-    await rawtree.insert({
-      table: "events",
-      values: { event: "signup" },
-      database: "staging",
-    });
-
-    expect(fetchMock.mock.calls[0]?.[0]).toBe(
-      "https://api.rawtree.com/v1/query?database=analytics",
-    );
-    expect(fetchMock.mock.calls[1]?.[0]).toBe(
-      "https://api.rawtree.com/v1/tables/events?database=staging",
-    );
-    const queryHeaders = fetchMock.mock.calls[0]?.[1]?.headers as Headers;
-    const insertHeaders = fetchMock.mock.calls[1]?.[1]?.headers as Headers;
-    expect(queryHeaders.get("x-rawtree-database")).toBeNull();
-    expect(insertHeaders.get("x-rawtree-database")).toBeNull();
-  });
-
-  it("supports overriding the user agent", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      jsonResponse({ meta: [], data: [], rows: 0, statistics: {} }),
-    );
-    const rawtree = new RawTree({
-      apiKey: "rw_test",
-      fetch: fetchMock,
-      userAgent: "my-service/1.0.0",
-    });
-
-    await rawtree.query({ sql: "SELECT 1" });
-
-    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers;
-    expect(headers.get("User-Agent")).toBe("my-service/1.0.0");
-  });
-
-  it("accepts named query params", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      jsonResponse({
-        meta: [],
-        data: [],
-        rows: 0,
-        statistics: { elapsed: 0, rows_read: 0, bytes_read: 0 },
-      }),
-    );
-    const rawtree = new RawTree({ apiKey: "rw_test", fetch: fetchMock });
-
-    await rawtree.query({ sql: "SELECT 1" });
-
-    expect(fetchMock.mock.calls[0]?.[1]?.body).toBe(JSON.stringify({ sql: "SELECT 1" }));
-  });
-
-  it("inserts a JSON object or array", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 2 }));
-    const rawtree = new RawTree({
-      apiKey: "rw_test",
-      baseUrl: "https://example.com/",
-      fetch: fetchMock,
-    });
-
-    await expect(rawtree.insert({
-      table: "events",
-      values: [{ event: "signup" }, { event: "purchase" }],
-    }))
-      .resolves.toEqual({ inserted: 2 });
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://example.com/v1/tables/events",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify([{ event: "signup" }, { event: "purchase" }]),
-      }),
-    );
-  });
-
-  it("inserts with a transform", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
-    const rawtree = new RawTree({
-      apiKey: "rw_test",
-      baseUrl: "https://example.com/",
-      fetch: fetchMock,
-    });
-
-    await rawtree.insert({
-      table: "traces",
-      values: { resourceSpans: [] },
-      transform: "otlp-traces",
-      database: "analytics",
-    });
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://example.com/v1/tables/traces?transform=otlp-traces&database=analytics",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({ resourceSpans: [] }),
-      }),
-    );
-  });
-
-  it("lists tables", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      jsonResponse({
-        tables: [{ name: "events", created_at: "2026-04-30", total_rows: 1, total_bytes: 10 }],
-      }),
-    );
-    const rawtree = new RawTree({ apiKey: "rw_test", fetch: fetchMock });
-
-    const result = await rawtree.tables.list();
-
-    expect(result.tables[0]?.name).toBe("events");
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.rawtree.com/v1/tables");
-    expect(fetchMock.mock.calls[0]?.[1]?.method).toBe("GET");
-  });
-
-  it("describes a table", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      jsonResponse({
-        table: {
-          name: "user events",
-          created_at: "2026-04-30",
-          total_rows: 1,
-          total_bytes: 10,
-          columns: [{ name: "event", type: "String" }],
-        },
-      }),
-    );
-    const rawtree = new RawTree({ apiKey: "rw_test", fetch: fetchMock });
-
-    await rawtree.tables.describe({ table: "user events" });
-
-    expect(fetchMock.mock.calls[0]?.[0]).toBe(
-      "https://api.rawtree.com/v1/tables/user%20events",
-    );
-  });
-
-  it("passes request options through", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
-    const rawtree = new RawTree({ apiKey: "rw_test", fetch: fetchMock });
-    const abortController = new AbortController();
-
-    await rawtree.insert({
-      table: "events",
-      values: { event: "signup" },
-      signal: abortController.signal,
-      headers: { "X-Test": "yes" },
-    });
-
-    const init = fetchMock.mock.calls[0]?.[1];
-    const headers = init?.headers as Headers;
-    expect(init?.signal).toBe(abortController.signal);
-    expect(headers.get("X-Test")).toBe("yes");
-  });
-
-  it("throws RawTreeError for JSON errors", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      jsonResponse(
-        { error: "bad_request", message: "Invalid SQL", hint: "Use SELECT" },
-        { status: 400 },
-      ),
-    );
-    const rawtree = new RawTree({ apiKey: "rw_test", fetch: fetchMock });
-
-    await expect(rawtree.query({ sql: "DROP TABLE events" })).rejects.toMatchObject({
-      name: "RawTreeError",
-      status: 400,
-      error: "bad_request",
-      message: "Invalid SQL",
-      hint: "Use SELECT",
-    });
-  });
-
-  it("throws RawTreeError for non-JSON errors", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response("not found", { status: 404 }),
-    );
-    const rawtree = new RawTree({ apiKey: "rw_test", fetch: fetchMock });
-
-    await expect(rawtree.tables.list()).rejects.toBeInstanceOf(RawTreeError);
-  });
-
-  it("keeps query rows generic", () => {
-    type EventRow = { event: string };
-    expectTypeOf<QueryResponse<EventRow>["data"]>().toEqualTypeOf<EventRow[]>();
-  });
-
+describe("@rawtree/otel", () => {
   it("captures monitoring events and flushes them to a table", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ inserted: 1 }));
     const rawtree = initRawTree({
@@ -349,8 +132,8 @@ describe("RawTree", () => {
     rawtree.capture("checkout.started", { userId: "u_123" });
     await rawtree.flush();
 
-    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
-    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+    const body = await bodyAt(fetchMock);
+    expect(requestAt(fetchMock).url).toBe(
       "https://api.rawtree.com/v1/tables/monitoring_events",
     );
     expect(body[0]).toMatchObject({
@@ -403,11 +186,11 @@ describe("RawTree", () => {
       await otel.shutdown().catch(() => undefined);
     }
 
-    const exportBody = firstOtlpExport(fetchMock);
-    const otlpSpan = firstOtlpSpan(fetchMock);
-    const otlpResource = firstOtlpResource(fetchMock);
+    const exportBody = await firstOtlpExport(fetchMock);
+    const otlpSpan = await firstOtlpSpan(fetchMock);
+    const otlpResource = await firstOtlpResource(fetchMock);
 
-    expect(fetchMock.mock.calls[0]?.[0])
+    expect(requestAt(fetchMock).url)
       .toBe("https://api.rawtree.com/v1/tables/traces?transform=otlp-traces");
     expect(exportBody.resourceSpans).toHaveLength(1);
     expect(otlpSpan).toMatchObject({
@@ -466,9 +249,9 @@ describe("RawTree", () => {
       await shutdownRawTreeTracerProvider();
     }
 
-    expect(fetchMock.mock.calls[0]?.[0])
+    expect(requestAt(fetchMock).url)
       .toBe("https://api.rawtree.com/v1/tables/traces?transform=otlp-traces");
-    expect(firstOtlpSpan(fetchMock)).toMatchObject({
+    expect(await firstOtlpSpan(fetchMock)).toMatchObject({
       name: "buffered span",
     });
   });
@@ -524,9 +307,9 @@ describe("RawTree", () => {
       await otel.shutdown().catch(() => undefined);
     }
 
-    expect(fetchMock.mock.calls[0]?.[0])
+    expect(requestAt(fetchMock).url)
       .toBe("https://api.rawtree.com/v1/tables/traces?transform=otlp-traces");
-    expect(firstOtlpSpan(fetchMock)).toMatchObject({
+    expect(await firstOtlpSpan(fetchMock)).toMatchObject({
       name: "after failed duplicate registration",
     });
   });
@@ -568,9 +351,9 @@ describe("RawTree", () => {
 
       expect(process.env.DAYTONA_OTEL_ENABLED).toBe("true");
       expect(process.env.DAYTONA_EXPERIMENTAL_OTEL_ENABLED).toBe("true");
-      expect(fetchMock.mock.calls[0]?.[0])
+      expect(requestAt(fetchMock).url)
         .toBe("https://rawtree.internal/v1/tables/traces?transform=otlp-traces");
-      expect(firstOtlpSpan(fetchMock)).toMatchObject({
+      expect(await firstOtlpSpan(fetchMock)).toMatchObject({
         name: "Daytona.create",
         attributes: expect.arrayContaining([
           {
@@ -583,7 +366,7 @@ describe("RawTree", () => {
           },
         ]),
       });
-      expect(firstOtlpResource(fetchMock)).toMatchObject({
+      expect(await firstOtlpResource(fetchMock)).toMatchObject({
         attributes: [
           {
             key: "service.name",
@@ -689,12 +472,12 @@ describe("RawTree", () => {
     }
 
     expect(monitorFetchMock).not.toHaveBeenCalled();
-    expect(traceFetchMock.mock.calls[0]?.[0])
+    expect(requestAt(traceFetchMock).url)
       .toBe("https://api.rawtree.com/v1/tables/traces?transform=otlp-traces");
-    expect(firstOtlpSpan(traceFetchMock)).toMatchObject({
+    expect(await firstOtlpSpan(traceFetchMock)).toMatchObject({
       name: "after monitoring close",
     });
-    expect(firstOtlpResource(traceFetchMock)).toMatchObject({
+    expect(await firstOtlpResource(traceFetchMock)).toMatchObject({
       attributes: [
         {
           key: "service.name",
@@ -756,10 +539,10 @@ describe("RawTree", () => {
     await rawtree.flush();
     await rawtree.close();
 
-    const rows = fetchMock.mock.calls.flatMap((call) => JSON.parse(call[1]?.body as string));
+    const rows = await allRows(fetchMock);
     const invokeAgentSpan = rows.find((row) => row.payload?.name === "ai.generateText");
     const generateContentSpan = rows.find((row) => row.payload?.name === "ai.generateText.doGenerate");
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.rawtree.com/v1/tables/ai_events");
+    expect(requestAt(fetchMock).url).toBe("https://api.rawtree.com/v1/tables/ai_events");
     expect(rows.every((row) => row.type === "ai.sdk.otel.span")).toBe(true);
     expect(invokeAgentSpan).toMatchObject({
       type: "ai.sdk.otel.span",
@@ -858,7 +641,7 @@ describe("RawTree", () => {
     await rawtree.flush();
     await rawtree.close();
 
-    const rows = fetchMock.mock.calls.flatMap((call) => JSON.parse(call[1]?.body as string));
+    const rows = await allRows(fetchMock);
     const invokeAgentSpan = rows.find((row) => row.payload?.name === "invoke_agent claude-test");
     const agentStepSpan = rows.find((row) => row.payload?.name === "step 1");
     const generateContentSpan = rows.find((row) => row.payload?.name === "chat claude-test");
@@ -944,9 +727,9 @@ describe("RawTree OpenTelemetry export errors", () => {
       await otel.shutdown().catch(() => undefined);
     }
 
-    expect(fetchMock.mock.calls[0]?.[0])
+    expect(requestAt(fetchMock).url)
       .toBe("https://api.rawtree.com/v1/tables/ai_traces?transform=otlp-traces");
-    expect(firstOtlpSpan(fetchMock)).toMatchObject({ name: "custom table span" });
+    expect(await firstOtlpSpan(fetchMock)).toMatchObject({ name: "custom table span" });
   });
 
   it("logs a failed export once per distinct message and still reports FAILED", async () => {
