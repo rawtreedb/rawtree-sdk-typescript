@@ -90,6 +90,9 @@ type QueryCallResult<Params, Opts> = RequestResult<
   Setting<Opts, "responseStyle", "data"> & ResponseStyle
 >;
 
+// Preserve excess-property checks while inferring the caller's format.
+type QueryInput<Params, Input extends Params> = Input & Record<Exclude<keyof Input, keyof Params>, never>;
+
 function typedQuery<Params extends { format?: string | null }>(
   execute: (parameters: Params, options?: Options<never, boolean>) => Promise<QueryRunResponse | undefined>,
 ) {
@@ -97,19 +100,21 @@ function typedQuery<Params extends { format?: string | null }>(
     parameters: Params & { format?: JsonFormat | null },
     options?: AutomaticQueryOptions,
   ): Promise<QueryResponse<Row>>;
-  function run<const Input extends Params>(parameters: Input): QueryCallResult<Input, undefined>;
+  function run<const Input extends Params>(parameters: QueryInput<Params, Input>): QueryCallResult<Input, undefined>;
   function run<const Input extends Params, const Opts extends Options<never, boolean> | undefined>(
-    parameters: Input, options: Opts,
+    parameters: QueryInput<Params, Input>, options: Opts,
   ): QueryCallResult<Input, Opts>;
   function run(parameters: Params, options?: Options<never, boolean>): Promise<unknown> {
     // Return NDJSON as text by default, including JSONEachRow from older servers
     // that use application/json for the same newline-delimited bytes.
     const format = parameters.format?.trim().toLowerCase();
     const rowFormat = format === "jsoneachrow" || format === "jsoneachrowwithprogress";
-    if (rowFormat && (!options?.parseAs || options.parseAs === "auto")) {
-      return execute(parameters, { ...options, parseAs: "text" });
-    }
-    return execute(parameters, options);
+    const decoder = options?.parseAs ?? "auto";
+    return execute(parameters, {
+      ...options,
+      parseAs: rowFormat && decoder === "auto" ? "text" : decoder,
+      responseStyle: options?.responseStyle ?? "data",
+    });
   }
   return run;
 }

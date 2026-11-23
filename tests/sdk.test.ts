@@ -117,7 +117,19 @@ describe("RawTree", () => {
     expectTypeOf(formatted).toEqualTypeOf<QueryResponse | string>();
     expectTypeOf(decoded).toEqualTypeOf<QueryResponse | string>();
     expectTypeOf(styled).toEqualTypeOf<QueryResponse | { data: QueryResponse; request: Request; response: Response }>();
-    expect([formatted, decoded, styled]).toEqual([emptyQuery, emptyQuery, emptyQuery]);
+    const unset = await rawtree.query({ sql: params.sql }, { responseStyle: undefined, parseAs: undefined });
+    expectTypeOf(unset).toEqualTypeOf<QueryResponse>();
+    expect([formatted, decoded, styled, unset]).toEqual(Array(4).fill(emptyQuery));
+  });
+
+  it("requires request options in the second argument", () => {
+    const rawtree = new RawTree({ apiKey: "rw_test" });
+    const invalid = () => rawtree.query({
+      sql: "SELECT 1",
+      // @ts-expect-error The query parameters do not carry request options.
+      signal: AbortSignal.abort(),
+    });
+    expectTypeOf(invalid).toBeFunction();
   });
 
   it("omits the body for a URL insert", async () => {
