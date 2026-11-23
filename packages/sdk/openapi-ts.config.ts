@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { defineConfig } from "@hey-api/openapi-ts";
 
-const source = process.env.RAWTREE_OPENAPI_URL ?? "https://api.rawtree.com/v1/openapi.json";
+const source = process.env.RAWTREE_OPENAPI_URL ?? "https://api.765eb5f5.us-east-1.aws.rawtree.com/v1/openapi.json";
 const spec = /^https?:\/\//.test(source)
   ? await fetch(source).then((response) => {
       if (!response.ok) throw new Error(`GET ${source} failed with status ${response.status}`);

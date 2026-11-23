@@ -220,7 +220,8 @@ with `rawtree.tables.insert({ table, transform: "firehose", body })`.
 `packages/sdk/openapi-ts.config.ts` or the hand-written wrapper in
 `packages/sdk/src/index.ts`, then regenerate.
 
-Regenerate from the production spec at `https://api.rawtree.com/v1/openapi.json`:
+Regenerate from the production spec, served by the us-east deployment at
+`https://api.765eb5f5.us-east-1.aws.rawtree.com/v1/openapi.json`:
 
 ```sh
 npm run generate

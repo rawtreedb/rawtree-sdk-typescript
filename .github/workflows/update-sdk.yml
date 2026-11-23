@@ -20,7 +20,7 @@ jobs:
   generate:
     runs-on: ubuntu-latest
     env:
-      RAWTREE_OPENAPI_URL: ${{ inputs.spec_url || 'https://api.rawtree.com/v1/openapi.json' }}
+      RAWTREE_OPENAPI_URL: ${{ inputs.spec_url || 'https://api.765eb5f5.us-east-1.aws.rawtree.com/v1/openapi.json' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
