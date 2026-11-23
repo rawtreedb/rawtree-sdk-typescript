@@ -352,6 +352,16 @@ describe("shorthand aliases", () => {
     });
   });
 
+  it("rawtree.insert() rejects Firehose envelopes", async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    const rawtree = new RawTree({ apiKey: "rw_test", fetch: fetchMock });
+
+    await expect(
+      rawtree.insert({ table: "events", values: { requestId: "r", records: [] }, transform: "firehose" }),
+    ).rejects.toThrow("rawtree.tables.insert");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("types rows on both forms", () => {
     type Row = { event: string };
     const rawtree = new RawTree({ apiKey: "rw_test" });

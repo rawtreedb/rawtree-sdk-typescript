@@ -210,7 +210,8 @@ await rawtree.insert({
 ```
 
 `transform` accepts built-in RawTree transforms such as `otlp-traces`,
-`otlp-logs`, and `otlp-metrics`.
+`otlp-logs`, and `otlp-metrics`. Firehose envelopes aren't rows, so send them
+with `rawtree.tables.insert({ table, transform: "firehose", body })`.
 
 ## Development
 

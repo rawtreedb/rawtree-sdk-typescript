@@ -206,12 +206,15 @@ export class RawTree extends RawTreeApi {
   }
 
   /** Shorthand for `rawtree.tables.insert` that takes the rows as `values`. */
-  insert<Row extends InsertRow = InsertRow>(
+  async insert<Row extends InsertRow = InsertRow>(
     { values, ...parameters }: InsertParams<Row>,
     options?: RequestOptions,
   ): Promise<InsertResponse> {
-    // Only transform=firehose returns a FirehoseInsertResponse, and its body is a
-    // Firehose envelope that AWS sends, not rows passed as `values`.
+    if (parameters.transform === "firehose") {
+      throw new TypeError(
+        "rawtree.insert() takes rows. Send Firehose envelopes with rawtree.tables.insert({ transform: \"firehose\", body }).",
+      );
+    }
     return this.tables.insert({ ...parameters, body: values }, options) as Promise<InsertResponse>;
   }
 }
