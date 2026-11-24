@@ -34,7 +34,8 @@ jobs:
       - id: checks
         continue-on-error: true
         run: npm run build && npm run typecheck && npm test
-      - uses: peter-evans/create-pull-request@v8
+      - id: pr
+        uses: peter-evans/create-pull-request@v8
         with:
           # Keep runs from a non-production spec off the production PR's branch.
           branch: ${{ inputs.spec_url && 'chore/update-sdk-preview' || 'chore/update-sdk' }}
@@ -48,5 +49,15 @@ jobs:
             Regenerated from ${{ env.RAWTREE_OPENAPI_URL }}.
 
             ${{ steps.checks.outcome == 'success' && 'Build, typecheck and tests pass.' || 'Build, typecheck or tests failed. The wrapper in `packages/sdk/src/index.ts` may need updating.' }} See the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+      - name: Summarize
+        env:
+          OPERATION: ${{ steps.pr.outputs.pull-request-operation }}
+          PR_URL: ${{ steps.pr.outputs.pull-request-url }}
+        run: |
+          case "$OPERATION" in
+            created|updated) echo "SDK changes found. Pull request $OPERATION: $PR_URL" ;;
+            closed) echo "The generated SDK matches \`main\` again, so the open pull request was closed." ;;
+            *) echo "No SDK changes. The generated code matches \`main\`, so no pull request was opened." ;;
+          esac | tee -a "$GITHUB_STEP_SUMMARY"
       - if: steps.checks.outcome == 'failure'
         run: exit 1
