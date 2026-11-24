@@ -1,0 +1,46 @@
+name: Publish @rawtree/otel
+
+# Release tags look like otel-v<version>.
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  npm:
+    name: Publish @rawtree/otel to npm
+    runs-on: ubuntu-latest
+    if: github.repository == 'rawtreedb/rawtree-sdk-typescript' && startsWith(github.event.release.tag_name, 'otel-v')
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - name: Use an npm that supports trusted publishing
+        run: npm install -g npm@^11.5.1
+      - run: npm ci
+      # @rawtree/otel typechecks against the built @rawtree/sdk.
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npm test
+      - name: Verify release tag matches package version
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name }}
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const pkg = JSON.parse(fs.readFileSync('packages/otel/package.json', 'utf8'));
+          const tag = process.env.TAG_NAME.replace(/^otel-v/, '');
+          if (pkg.version !== tag) {
+            throw new Error(`Release tag ${process.env.TAG_NAME} does not match package version ${pkg.version}`);
+          }
+          NODE
+      # Auth uses npm trusted publishing (OIDC, no stored token), configured for this workflow on npmjs.com.
+      - run: npm publish --provenance --access public
+        working-directory: packages/otel
