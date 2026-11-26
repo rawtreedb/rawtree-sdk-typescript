@@ -6,7 +6,6 @@ export const databaseOperations: ReadonlySet<string> = new Set([
   "GET /v1/handlers/{path}",
   "GET /v1/query",
   "POST /v1/query",
-  "POST /v1/spl/search",
   "GET /v1/tables",
   "POST /v1/tables",
   "GET /v1/tables/{table}",
