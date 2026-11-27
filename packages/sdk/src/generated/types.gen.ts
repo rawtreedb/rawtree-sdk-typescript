@@ -130,6 +130,20 @@ export type CreateTableResponse = {
     settings: Array<TableSetting>;
 };
 
+/**
+ * Optional body of a manual run request.
+ */
+export type CreateWorkflowRun = {
+    /**
+     * Values for the workflow SQL's `{name:Type}` placeholders, keyed by name.
+     * RawTree parses each value as the placeholder's type. An omitted
+     * `Nullable` placeholder is NULL; any other omitted placeholder fails the run.
+     */
+    parameters?: {
+        [key: string]: WorkflowRunParameterValue;
+    };
+};
+
 export type DatabaseItem = {
     name: string;
 };
@@ -395,6 +409,10 @@ export type QueryResponse = {
     rows: number;
     statistics: QueryResponseStatistics;
     hints?: Array<string> | null;
+    /**
+     * False when no ClickHouse query log entry exists for the submitted query ID.
+     */
+    query_log_available?: boolean | null;
 };
 
 export type QueryResponseColumnMeta = {
@@ -804,7 +822,19 @@ export type WorkflowRun = {
      * One entry per sink the run handed rows to, ordered by sink ID.
      */
     deliveries: Array<SinkDelivery>;
+    /**
+     * Values bound to the SQL's placeholders, as sent to RawTree. Empty for
+     * scheduled runs and manual runs without parameters.
+     */
+    parameters: {
+        [key: string]: string;
+    };
 };
+
+/**
+ * A string, number, or boolean. Send arrays, maps, and values that do not fit a JSON number as strings in the type's text form, such as ['a','b'].
+ */
+export type WorkflowRunParameterValue = string | number | boolean;
 
 export type WorkflowRunSource = 'manual';
 
@@ -1467,14 +1497,10 @@ export type SplSearchData = {
         earliest?: string | null;
         latest?: string | null;
         include_field_statistics?: boolean;
+        stream_progress?: boolean;
     };
     path?: never;
-    query?: {
-        /**
-         * Database containing splunk_events. Database-bound API keys may omit this parameter.
-         */
-        database?: string;
-    };
+    query?: never;
     url: '/v1/spl/search';
 };
 
@@ -2009,10 +2035,10 @@ export type WorkflowsRunsListResponses = {
 export type WorkflowsRunsListResponse = WorkflowsRunsListResponses[keyof WorkflowsRunsListResponses];
 
 export type WorkflowsRunsCreateData = {
-    body?: never;
+    body?: null | CreateWorkflowRun;
     headers?: {
         /**
-         * Optional retry key, 1–128 visible ASCII characters without spaces. Scoped to this workflow; deduplication lasts while Temporal retains the execution.
+         * Optional retry key, 1–128 visible ASCII characters without spaces. Scoped to this workflow; deduplication lasts while Temporal retains the execution. A reused key returns the original run, even if the parameters differ.
          */
         'Idempotency-Key'?: string | null;
     };
@@ -2028,6 +2054,7 @@ export type WorkflowsRunsCreateErrors = {
     401: ErrorResponse;
     403: ErrorResponse;
     404: ErrorResponse;
+    413: ErrorResponse;
     503: ErrorResponse;
 };
 

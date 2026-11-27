@@ -2,7 +2,7 @@
 
 import { client } from './client.gen.js';
 import { buildClientParams, type Client, type ClientMeta, type Options as Options2, type RequestResult, type TDataShape } from './client/index.js';
-import type { ActorType, ApiKeysCreateErrors, ApiKeysCreateResponses, ApiKeysDeleteErrors, ApiKeysDeleteResponses, ApiKeysListErrors, ApiKeysListResponses, Category, ClustersListErrors, ClustersListResponses, DatabasesCreateErrors, DatabasesCreateResponses, DatabasesDeleteErrors, DatabasesDeleteResponses, DatabasesListErrors, DatabasesListResponses, DatabasesVerifyS3AccessErrors, DatabasesVerifyS3AccessResponses, FeedbackSubmitErrors, FeedbackSubmitResponses, HandlersCreateErrors, HandlersCreateResponses, HandlersInvokeErrors, HandlersInvokeResponses, HandlersListErrors, HandlersListResponses, HealthCheckErrors, HealthCheckResponses, HttpSinkSettingsInput, LogsListErrors, LogsListResponses, OrganizationsListErrors, OrganizationsListResponses, PermissionLevel, PrincipalType, QueryFormatErrors, QueryFormatResponses, QueryRunErrors, QueryRunReadOnlyErrors, QueryRunReadOnlyResponses, QueryRunResponses, S3StorageInput, SinkInput, SinkType, SlackSinkSettingsInput, SlackSinkSettingsPatch, SplCapabilitiesResponses, SplSearchErrors, SplSearchResponses, TablesCreateErrors, TablesCreateResponses, TablesDeleteErrors, TablesDeleteResponses, TablesDescribeErrors, TablesDescribeResponses, TableSettingValue, TableSinkSettings, TableSinkSettingsPatch, TablesInsertErrors, TablesInsertResponses, TablesListErrors, TablesListResponses, TablesSettingsGetResponses, TablesSettingsUpdateResponses, TablesUpdateErrors, TablesUpdateResponses, UpdateWorkflowQuery, UpdateWorkflowSchedule, WorkflowQuery, WorkflowSchedule, WorkflowsCreateErrors, WorkflowsCreateResponses, WorkflowsDeleteErrors, WorkflowsDeleteResponses, WorkflowsGetErrors, WorkflowsGetResponses, WorkflowsListErrors, WorkflowsListResponses, WorkflowsLogsListErrors, WorkflowsLogsListResponses, WorkflowsRunsCancelErrors, WorkflowsRunsCancelResponses, WorkflowsRunsCreateErrors, WorkflowsRunsCreateResponses, WorkflowsRunsListErrors, WorkflowsRunsListResponses, WorkflowsSinksCreateErrors, WorkflowsSinksCreateResponses, WorkflowsSinksDeleteErrors, WorkflowsSinksDeleteResponses, WorkflowsSinksUpdateErrors, WorkflowsSinksUpdateResponses, WorkflowsUpdateErrors, WorkflowsUpdateResponses } from './types.gen.js';
+import type { ActorType, ApiKeysCreateErrors, ApiKeysCreateResponses, ApiKeysDeleteErrors, ApiKeysDeleteResponses, ApiKeysListErrors, ApiKeysListResponses, Category, ClustersListErrors, ClustersListResponses, CreateWorkflowRun, DatabasesCreateErrors, DatabasesCreateResponses, DatabasesDeleteErrors, DatabasesDeleteResponses, DatabasesListErrors, DatabasesListResponses, DatabasesVerifyS3AccessErrors, DatabasesVerifyS3AccessResponses, FeedbackSubmitErrors, FeedbackSubmitResponses, HandlersCreateErrors, HandlersCreateResponses, HandlersInvokeErrors, HandlersInvokeResponses, HandlersListErrors, HandlersListResponses, HealthCheckErrors, HealthCheckResponses, HttpSinkSettingsInput, LogsListErrors, LogsListResponses, OrganizationsListErrors, OrganizationsListResponses, PermissionLevel, PrincipalType, QueryFormatErrors, QueryFormatResponses, QueryRunErrors, QueryRunReadOnlyErrors, QueryRunReadOnlyResponses, QueryRunResponses, S3StorageInput, SinkInput, SinkType, SlackSinkSettingsInput, SlackSinkSettingsPatch, SplCapabilitiesResponses, SplSearchErrors, SplSearchResponses, TablesCreateErrors, TablesCreateResponses, TablesDeleteErrors, TablesDeleteResponses, TablesDescribeErrors, TablesDescribeResponses, TableSettingValue, TableSinkSettings, TableSinkSettingsPatch, TablesInsertErrors, TablesInsertResponses, TablesListErrors, TablesListResponses, TablesSettingsGetResponses, TablesSettingsUpdateResponses, TablesUpdateErrors, TablesUpdateResponses, UpdateWorkflowQuery, UpdateWorkflowSchedule, WorkflowQuery, WorkflowSchedule, WorkflowsCreateErrors, WorkflowsCreateResponses, WorkflowsDeleteErrors, WorkflowsDeleteResponses, WorkflowsGetErrors, WorkflowsGetResponses, WorkflowsListErrors, WorkflowsListResponses, WorkflowsLogsListErrors, WorkflowsLogsListResponses, WorkflowsRunsCancelErrors, WorkflowsRunsCancelResponses, WorkflowsRunsCreateErrors, WorkflowsRunsCreateResponses, WorkflowsRunsListErrors, WorkflowsRunsListResponses, WorkflowsSinksCreateErrors, WorkflowsSinksCreateResponses, WorkflowsSinksDeleteErrors, WorkflowsSinksDeleteResponses, WorkflowsSinksUpdateErrors, WorkflowsSinksUpdateResponses, WorkflowsUpdateErrors, WorkflowsUpdateResponses } from './types.gen.js';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -634,7 +634,7 @@ export class Query extends HeyApiClient {
     /**
      * Execute SQL query and return results in the requested ClickHouse format
      *
-     * Accepts read-only queries, `TRUNCATE TABLE [IF EXISTS] [database.]<table> [SYNC]` to remove all rows while preserving table configuration (requires write permission and always waits for replicas), `ALTER TABLE [database.]<table> MODIFY ORDER BY (...)` to change a table sorting key, `ALTER TABLE [database.]<table> MODIFY TTL <expression> [DELETE [WHERE <condition>]]` to set or replace row retention, `ALTER TABLE [database.]<table> MODIFY SETTING name = value, ...` and `RESET SETTING name, ...` to configure engine-supported table settings, `ALTER TABLE [database.]<table> ADD PROJECTION [IF NOT EXISTS] <name> (SELECT ...)`, `MATERIALIZE PROJECTION [IF EXISTS] <name>`, `CLEAR PROJECTION [IF EXISTS] <name>`, and `DROP PROJECTION [IF EXISTS] <name>` to manage projections, `ADD INDEX [IF NOT EXISTS] <name> <expression> TYPE <type> [GRANULARITY <n>]`, `MATERIALIZE INDEX [IF EXISTS] <name>`, `CLEAR INDEX [IF EXISTS] <name>`, and `DROP INDEX [IF EXISTS] <name>` to manage indexes (including text indexes), `KILL MUTATION WHERE table = '<table>' [AND mutation_id = '<id>']` to stop a running projection or index materialization or clear in the selected database, `INSERT INTO [database.]<table> [(columns)] SELECT ...` to materialize query results into an existing table, `INSERT INTO FUNCTION s3(...) SELECT ...` to export query results to S3, and `CREATE TABLE [IF NOT EXISTS] [database.]<table> ENGINE = ReplicatedRawMergeTree [ORDER BY (...)] [TTL <expression> [DELETE [WHERE <condition>]]] [SETTINGS name = value, ...]` to create a table in the selected user database. ALTER and KILL MUTATION require the same authorization as updating table configuration, and CREATE TABLE the same as creating a table. Unsupported CREATE TABLE statements are rejected with a supported query in the hint. INSERT requires read and write permission, rejects url()/urlCluster() sources, and reports `statistics.written_rows`. Organization administrators and admin API keys may also CREATE ROLE, DROP ROLE [IF EXISTS], and GRANT SELECT or INSERT on explicitly qualified tables to existing roles; these operations apply to the selected cluster. Administrators may CREATE NAMED COLLECTION [IF NOT EXISTS] <name> [ON CLUSTER default] AS key = literal [NOT OVERRIDABLE | OVERRIDABLE], ... . Only string, numeric, and boolean literals are supported. ON CLUSTER default is passed through with native database semantics; distributed DDL exposes collection values in system.distributed_ddl_queue. Collection use permissions are managed separately; ALTER and DROP NAMED COLLECTION are unsupported. Other DCL and delegation options are not accepted. Administrators may manage WORKLOAD and RESOURCE definitions with CREATE, CREATE OR REPLACE, and DROP; ON CLUSTER default is optional and must be omitted with Keeper-backed workload storage. Reads and INSERT SELECT can select a workload using SQL SETTINGS workload = 'interactive'. Administrators may use CREATE SETTINGS PROFILE (including OR REPLACE) and DROP SETTINGS PROFILE for workload and use_concurrency_control, optionally READONLY or CONST, assigned to explicit existing database roles; arbitrary settings, users, and inheritance are unsupported. Organization members and admin API keys may CREATE MASKING POLICY and DROP MASKING POLICY on a table in the selected database. UPDATE assigns masked values, WHERE selects rows, and TO names existing database roles. Administrators may CREATE ROW POLICY (including OR REPLACE) and DROP ROW POLICY on one table in the selected user database, with a SELECT filter assigned to explicit existing roles. Only ON CLUSTER default is supported and requires an explicitly qualified database.table target. Row policies filter reads for their target roles; they do not constrain writes or guarantee restrictions on untargeted readers.
+     * Accepts read-only queries, `TRUNCATE TABLE [IF EXISTS] [database.]<table> [SYNC]` to remove all rows while preserving table configuration (requires write permission and always waits for replicas), `ALTER TABLE [database.]<table> MODIFY ORDER BY (...)` to change a table sorting key, `ALTER TABLE [database.]<table> MODIFY TTL <expression> [DELETE [WHERE <condition>]]` to set or replace row retention, `ALTER TABLE [database.]<table> MODIFY SETTING name = value, ...` and `RESET SETTING name, ...` to configure engine-supported table settings, `ALTER TABLE [database.]<table> ADD PROJECTION [IF NOT EXISTS] <name> (SELECT ...)`, `MATERIALIZE PROJECTION [IF EXISTS] <name>`, `CLEAR PROJECTION [IF EXISTS] <name>`, and `DROP PROJECTION [IF EXISTS] <name>` to manage projections, `ADD INDEX [IF NOT EXISTS] <name> <expression> TYPE <type> [GRANULARITY <n>]`, `MATERIALIZE INDEX [IF EXISTS] <name>`, `CLEAR INDEX [IF EXISTS] <name>`, and `DROP INDEX [IF EXISTS] <name>` to manage indexes (including text indexes), `ALTER TABLE [database.]<table> MATERIALIZE PRIMARY KEY` to re-sort existing parts by the columns most often used in query filters, `KILL MUTATION WHERE table = '<table>' [AND mutation_id = '<id>']` to stop a running projection, index, or primary key materialization or clear in the selected database, `INSERT INTO [database.]<table> [(columns)] SELECT ...` to materialize query results into an existing table, `INSERT INTO FUNCTION s3(...) SELECT ...` to export query results to S3, and `CREATE TABLE [IF NOT EXISTS] [database.]<table> ENGINE = ReplicatedRawMergeTree [ORDER BY (...)] [TTL <expression> [DELETE [WHERE <condition>]]] [SETTINGS name = value, ...]` to create a table in the selected user database. ALTER and KILL MUTATION require the same authorization as updating table configuration, and CREATE TABLE the same as creating a table. Unsupported CREATE TABLE statements are rejected with a supported query in the hint. INSERT requires read and write permission, rejects url()/urlCluster() sources, and reports `statistics.written_rows`. Organization administrators and admin API keys may also CREATE ROLE, DROP ROLE [IF EXISTS], and GRANT SELECT or INSERT on explicitly qualified tables to existing roles; these operations apply to the selected cluster. Administrators may CREATE NAMED COLLECTION [IF NOT EXISTS] <name> [ON CLUSTER default] AS key = literal [NOT OVERRIDABLE | OVERRIDABLE], ... . Only string, numeric, and boolean literals are supported. ON CLUSTER default is passed through with native database semantics; distributed DDL exposes collection values in system.distributed_ddl_queue. Collection use permissions are managed separately; ALTER and DROP NAMED COLLECTION are unsupported. Other DCL and delegation options are not accepted. Administrators may manage WORKLOAD and RESOURCE definitions with CREATE, CREATE OR REPLACE, and DROP; ON CLUSTER default is optional and must be omitted with Keeper-backed workload storage. Reads and INSERT SELECT can select a workload using SQL SETTINGS workload = 'interactive'. Administrators may use CREATE SETTINGS PROFILE (including OR REPLACE) and DROP SETTINGS PROFILE for workload and use_concurrency_control, optionally READONLY or CONST, assigned to explicit existing database roles; arbitrary settings, users, and inheritance are unsupported. Organization members and admin API keys may CREATE MASKING POLICY and DROP MASKING POLICY on a table in the selected database. UPDATE assigns masked values, WHERE selects rows, and TO names existing database roles. Administrators may CREATE ROW POLICY (including OR REPLACE) and DROP ROW POLICY on one table in the selected user database, with a SELECT filter assigned to explicit existing roles. Only ON CLUSTER default is supported and requires an explicitly qualified database.table target. Row policies filter reads for their target roles; they do not constrain writes or guarantee restrictions on untargeted readers.
      */
     public run<ThrowOnError extends boolean = true>(parameters: {
         database?: string;
@@ -718,23 +718,23 @@ export class Spl extends HeyApiClient {
     }
     
     /**
-     * Execute the supported SPL v1 subset over splunk_events
+     * Execute the supported SPL v1 subset over the configured Splunk search source
      */
     public search<ThrowOnError extends boolean = true>(parameters: {
-        database?: string;
         spl: string;
         query_id?: string | null;
         earliest?: string | null;
         latest?: string | null;
         include_field_statistics?: boolean;
+        stream_progress?: boolean;
     }, options?: Options<never, ThrowOnError>): RequestResult<SplSearchResponses, SplSearchErrors, ThrowOnError, 'data'> {
         const params = buildClientParams([parameters], [{ args: [
-                    { in: 'query', key: 'database' },
                     { in: 'body', key: 'spl' },
                     { in: 'body', key: 'query_id' },
                     { in: 'body', key: 'earliest' },
                     { in: 'body', key: 'latest' },
-                    { in: 'body', key: 'include_field_statistics' }
+                    { in: 'body', key: 'include_field_statistics' },
+                    { in: 'body', key: 'stream_progress' }
                 ] }]);
         return (options?.client ?? this.client).post<SplSearchResponses, SplSearchErrors, ThrowOnError, 'data'>({
             responseStyle: 'data',
@@ -1132,15 +1132,21 @@ export class Runs extends HeyApiClient {
     /**
      * Execute a saved workflow once, independently of its schedule.
      *
-     * No request body is required. Acceptance does not mean execution or delivery
-     * has completed. Reuse an Idempotency-Key to recover the same run after a
-     * timeout, while Temporal retains its execution history.
+     * The body is optional. Its `parameters` bind values to the workflow SQL's
+     * `{name:Type}` placeholders for this run only. Acceptance does not mean
+     * execution or delivery has completed. Reuse an Idempotency-Key to recover the
+     * same run after a timeout, while Temporal retains its execution history.
      */
     public create<ThrowOnError extends boolean = true>(parameters: {
         'Idempotency-Key'?: string | null;
         workflow_id: string;
+        body?: null | CreateWorkflowRun;
     }, options?: Options<never, ThrowOnError>): RequestResult<WorkflowsRunsCreateResponses, WorkflowsRunsCreateErrors, ThrowOnError, 'data'> {
-        const params = buildClientParams([parameters], [{ args: [{ in: 'headers', key: 'Idempotency-Key' }, { in: 'path', key: 'workflow_id' }] }]);
+        const params = buildClientParams([parameters], [{ args: [
+                    { in: 'headers', key: 'Idempotency-Key' },
+                    { in: 'path', key: 'workflow_id' },
+                    { key: 'body', map: 'body' }
+                ] }]);
         return (options?.client ?? this.client).post<WorkflowsRunsCreateResponses, WorkflowsRunsCreateErrors, ThrowOnError, 'data'>({
             responseStyle: 'data',
             security: [
@@ -1162,7 +1168,12 @@ export class Runs extends HeyApiClient {
             ],
             url: '/v1/workflows/{workflow_id}/runs',
             ...options,
-            ...params
+            ...params,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options?.headers,
+                ...params.headers
+            }
         });
     }
     
